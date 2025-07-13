@@ -30,8 +30,6 @@ class Websocket_receiver:
         except:
             self.logger.error("Websocket Receiver Error: %s" % "Unknown Error or closed()")
 
-    async def initialize(self):
-        await self.msg_raw_receiver()
     async def start_receiver(self):
         await self.msg_raw_receiver()
 if __name__ == '__main__':
