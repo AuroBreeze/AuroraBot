@@ -69,7 +69,6 @@ class AuthManager(IAuthManager):
     def permission_evaluation_and_assessment(self, group_id: str, user_id: str, level: int = 1) -> tuple[bool, str]:
         try:
             if not self.check_permission(group_id, user_id, level):  
-                print(2)
                 user_level, msg = self.get_permission_level(group_id, user_id)
                 self.logger.warning(f"用户 {user_id} 权限不足,所需权限为 {level} ,当前权限为 {user_level} ")
                 return False, f"用户 {user_id} 权限不足,所需权限为 {level} ,当前权限为 {user_level} "

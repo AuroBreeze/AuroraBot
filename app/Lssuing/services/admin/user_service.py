@@ -35,6 +35,11 @@ class UserService_admin_API:
         if msg is not None:
             await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
 
+        # 帮助菜单
+        judge,msg = await self.service.help_service(self.message)
+        if msg is not None:
+            await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
+
 class UserService:
     """
     用户权限管理
@@ -98,6 +103,31 @@ class UserService:
                 return True,f"已取消群组 {target_group_id} 的用户 {target_user_id} 的权限"
         except Exception as e:
             return False, f"取消权限过程中发生错误: {str(e)}"
+
+    async def help_service(self,message) -> tuple[bool, str]:
+        """
+        指令菜单
+        """
+        msg = str(message.get("raw_message"))
+        if msg == "help": # help_group_service
+            pass
+        else:
+            self.logger.debug("无效的群组服务帮助命令格式")
+            return False, None
+        
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        # 检查用户权限
+        check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, user_id, 3)
+        if not check_judge:
+            return False, check_msg
+        
+        msg = "Admin 群组服务(group_service)指令菜单:\n" \
+              "1. raise_user <target_group_id> <target_user> <level> - 提升用户群组权限\n" \
+              "2. remove_user <target_group_id> <target_user_id> - 移除用户群组权限\n" \
+        
+        return True, msg
 
 
 

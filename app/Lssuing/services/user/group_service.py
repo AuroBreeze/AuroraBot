@@ -22,15 +22,20 @@ class GroupService_user_API:
         """
         if self.message.get("message_type") != "group":
             return
-                # 获取群组信息
-        judge, msg = await self.service.get_group_information(self.message)
-        if msg is not None:
-            await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
 
         judge, msg = await self.service.list_user_permissions(self.message)
         if msg is not None:
             #await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
             await self.service.send_at_group_msg(self.websocket, self.message.get("group_id"), self.message.get("user_id"), msg)
+
+        judge, msg = await self.service.check_group_information(self.message)
+        if msg is not None:
+            await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
+
+        judge, msg = await self.service.help_service(self.message)
+        if msg is not None:
+            await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
+
 
 
 class GroupService:
@@ -41,39 +46,12 @@ class GroupService:
         self.db = db
         self.auth = AuthManager(db)
         self.bj_tz = pytz.timezone(lssuing_cfg.TIMEZONE)
-    async def get_group_information(self, message) -> tuple[bool, str]:
-        """
-        获取群授权信息
-        """
-        msg = str(message.get("raw_message"))
-        if not msg.startswith("get_group_information "): # get_group_information <target_group_id>
-            self.logger.debug("无效的获取群权限命令格式")
-            return False, None
-        
-        group_id = message.get("group_id")
-        user_id = str(message.get("user_id"))
-        
-        # 检查用户权限
-        check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, user_id, 3)
-        if not check_judge:
-            return False, check_msg
-        
-        
-        part = msg.split(" ")
-        target_group_id = part[1]
-
-        info,msg = self.db.get_group_information(target_group_id, user_id)
-        if info: # (3, '736038975', '1732373074', '2025-07-11 21:14:11', '2025-07-21 21:14:11', 'all', '2025-07-11 13:14:11')
-            return True, f"群组: {target_group_id}\n管理员: {info[2]}\n创建时间: {info[3]}\n到期时间: {info[4]}\n群组权限: {info[5]}"
-        else:
-            return False, msg
-
     async def list_user_permissions(self,message) -> tuple[bool, str]:
         """
         列出群组所有的授权用户
         """
         msg = str(message.get("raw_message"))
-        if not msg.startswith("list_user_permissions "): # list_user_permissions <target_group_id>
+        if not msg.startswith("list_user "): # list_user <target_group_id>
             self.logger.debug("无效的列出群组授权用户命令格式")
             return False, None
         
@@ -98,6 +76,55 @@ class GroupService:
             return True, msg
         else:
             return False, msg_or_err
+    
+    async def check_group_information(self, message) -> tuple[bool, str]:
+        """
+        检查群组信息
+        """
+        msg = str(message.get("raw_message"))
+        if msg == "check_group": # check_group
+            pass
+        else:
+            self.logger.debug("无效的检查群组权限命令格式")
+            return False, None
+        
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        # 检查用户权限
+        check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, user_id, 3)
+        if not check_judge:
+            return False, check_msg
+        
+        judge,msg_or_err = self.db.check_group_permission(group_id) #(2,736038975,1732373074,2025-07-13 20:21:09,2025-07-23 20:21:09,all,2025-07-13 12:21:09)
+        if judge:
+            msg = f"群组: {group_id}\n管理员: {msg_or_err[2]}\n创建时间: {msg_or_err[3]}\n到期时间: {msg_or_err[4]}\n群组权限: {msg_or_err[5]}"
+            return True, msg
+        else:
+            return False, msg_or_err
+    async def help_service(self, message) -> tuple[bool, str]:
+        """
+        指令菜单
+        """
+        msg = str(message.get("raw_message"))
+        if msg == "help": # help_group_service
+            pass
+        else:
+            self.logger.debug("无效的群组服务帮助命令格式")
+            return False, None
+        
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        # 检查用户权限
+        check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, user_id, 3)
+        if not check_judge:
+            return False, check_msg
+        
+        msg = "User 群组服务(group_service)指令菜单:\n" \
+              "1. list_user <target_group_id> - 列出群组所有的授权用户\n" \
+              "2. check_group - 检查群组信息\n"
+        return True, msg
 
     async def send_group_message(self, websocket, group_id, message):
         """发送群消息"""

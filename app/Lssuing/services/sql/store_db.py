@@ -222,6 +222,8 @@ class Store_db:
             WHERE group_id = ? AND user_id = ?
             """, (group_id, user_id))
             result = cursor.fetchone()
+            if result is None:
+                return False
             
             if result and result[0] <= required_level:
                 return True
@@ -526,9 +528,8 @@ class Store_db:
             """, (group_id, datetime.now(self.bj_tz), datetime.now(self.bj_tz)))
             result = cursor.fetchone()
             if not result:
-                return False, f"群组{group_id}没有授权,授权时间段为{result[2]}至{result[3]}"
-            
-            return True, None
+                return False, result #f"群组{group_id}没有授权,授权时间段为{result[2]}至{result[3]}"
+            return True, result
             
         except Exception as e:
             self.logger.error(f"查询群组授权状态失败: {e}")
