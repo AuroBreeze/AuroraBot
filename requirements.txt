@@ -1,0 +1,9 @@
+websockets
+colorlog
+openai
+setuptools
+pyyaml
+pytz
+faiss-cpu
+sentence_transformers
+requests
