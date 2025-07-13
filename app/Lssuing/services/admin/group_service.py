@@ -31,6 +31,10 @@ class GroupService_admin_API:
         if msg is not None:
             await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
 
+        judge, msg = await self.service.help_service(self.message)
+        if msg is not None:
+            await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
+
 class GroupService:
     """1级权限，群组服务层，封装所有群组相关业务逻辑"""
     
@@ -121,6 +125,30 @@ class GroupService:
                 return False, f"取消群授权失败: {msg}"
         except Exception as e:
             return False, f"取消授权过程中发生错误: {str(e)}"
+    async def help_service(self,message) -> tuple[bool, str]:
+        """
+        指令菜单
+        """
+        msg = str(message.get("raw_message"))
+        if msg == "help": # help_group_service
+            pass
+        else:
+            self.logger.debug("无效的群组服务帮助命令格式")
+            return False, None
+        
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        # 检查用户权限
+        check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, user_id, 3)
+        if not check_judge:
+            return False, check_msg
+        
+        msg = "Admin 群组服务(group_service)指令菜单:\n" \
+              "1. subscribe_group <target_group_id>\nstarttime now\nendtime <days:int>\nuser_id <target_user_id>\nfeatures all - 添加群组授权\n" \
+              "2. unsubscribe_group <target_group_id> - 取消群组授权\n" \
+
+        return True, msg
     async def send_group_message(self, websocket, group_id, message):
         """发送群消息"""
         await QQAPI_list(websocket).send_group_message(group_id, message)

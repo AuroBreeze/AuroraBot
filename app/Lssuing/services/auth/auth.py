@@ -74,5 +74,6 @@ class AuthManager(IAuthManager):
                 return False, f"用户 {user_id} 权限不足,所需权限为 {level} ,当前权限为 {user_level} "
             return True,None
         except Exception as e:
+            print(1)
             self.logger.error(f"权限检查失败: {e}")
             return False,f"权限检查失败: {e}"
