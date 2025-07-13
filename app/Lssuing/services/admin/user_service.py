@@ -46,7 +46,7 @@ class UserService:
     async def raise_user_permission(self,message) -> tuple[bool, str]:
         """改变用户群组权限"""
         msg = str(message.get("raw_message"))
-        if not msg.startswith("raise "):
+        if not msg.startswith("raise_user "): # raise <target_group_id> <target_user> <level>
             self.logger.debug("无效的权限提高命令格式")
             return False, None
         

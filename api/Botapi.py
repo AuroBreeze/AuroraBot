@@ -81,4 +81,37 @@ class QQAPI_list:
         await self.websocket.send(json.dumps(json_message))
         self.logger.info(f"已发送群@消息,@{user_id}")
         await asyncio.sleep(1.5)
+    async def send_at_group_message(self,group_id:str,user_id:str,message:str):
+        """
+        发送群聊at消息
+
+        :param group_id:群号
+        :param user_id:用户id
+        :param message:消息
+        :return: None
+        """
+
+        json_message = {
+            "action": "send_group_msg",
+            "params":{
+                    "group_id": group_id,
+                    "message": [
+                        {
+                            "type": "at",
+                            "data": {
+                                "qq": user_id
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "data": {
+                                "text": message
+                            }
+                        }
+                    ]
+                }
+            }
+        await self.websocket.send(json.dumps(json_message))
+        self.Logger.info(f"已发送群@消息,@{user_id},消息:{message}")
+        await asyncio.sleep(1.5)
                 

@@ -183,7 +183,7 @@ class Store_db:
                          (group_id, parent_id))
             parent_level = cursor.fetchone()[0]
             if level <= parent_level:  # 新权限等级必须大于父级
-                if self.check_user_permission(group_id, parent_id, 1) == False:
+                if self.check_user_permission(group_id, parent_id, 2) == False:
                     msg = f"权限等级必须比授权者({parent_level})低一级"
                     self.logger.warning(msg)
                     return False, msg
@@ -278,6 +278,9 @@ class Store_db:
         
         """
         try:
+            if str(manager_id) == str(QQ_ADMIN):  # 管理员权限
+                return True
+
             conn = self._get_connection()
             cursor = conn.cursor()
             
@@ -429,12 +432,9 @@ class Store_db:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute("""
-            SELECT p.*, a.start_time, a.end_time, a.features 
-            FROM user_permissions p
-            JOIN group_information a ON p.group_id = a.group_id AND p.user_id = a.user_id
-            WHERE p.group_id = ? AND datetime('now') BETWEEN a.start_time AND a.end_time
+            SELECT user_id,level,parent_id FROM user_permissions WHERE group_id = ?
             """, (group_id,))
-            return cursor.fetchall(), ""
+            return cursor.fetchall(), None
         except Exception as e:
             self.logger.error(f"列出群组用户失败: {e}")
             return [], f"列出群组用户失败: {e}"
