@@ -454,6 +454,28 @@ class Store_db:
         except sqlite3.OperationalError as e:
             self.logger.error(f"列出群组失败: {e}")
             return None, f"列出群组失败: {e}"
+    def kick_unpermission_group(self,group_id:str) -> tuple[bool, str]:
+        """
+        踢出不在授权列表中的群组
+        :return: (是否成功, 错误信息)
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+            SELECT group_id FROM group_permissions
+            """)
+            groups = cursor.fetchall()
+            
+            if not groups:
+                return True, "无该授权群组"
+
+            cursor.execute("""DELETE group_id FROM group_permissions WHERE group_id=?""",(group_id,))
+            conn.commit()
+            return True, f"已移除群组 {group_id} 的授权状态""}"
+        except Exception as e:
+            self.logger.error(f"移除群组 {group_id} 失败: {e}")
+            return False, f"移除群组 {group_id} 失败: {e}"
 
     def get_manageable_users(self, group_id: str, manager_id: str) -> tuple[list, str]:
         """获取用户可以管理的用户列表

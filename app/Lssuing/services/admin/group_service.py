@@ -178,7 +178,9 @@ class GroupService:
                     
                     if remaining_days <= 0:
                         # 已过期群组
-                        await self.kick_group(group_id)
+                        check_judge,check_msg = self.db.kick_unpermission_group(group_id)
+                        if check_msg is not None:
+                            await self.send_group_message(self.websocket, group_id, check_msg)
                         kicked_groups.append(f"{group_id}(已过期)")
                         self.logger.info(f"已踢出过期群组: {group_id}")
                     elif remaining_days <= 3:
