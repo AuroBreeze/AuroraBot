@@ -171,4 +171,8 @@ local_model
 *.index
 *.pkl
 study/
+*.db
+*.index
+*.pkl
+study/
 .aider*
