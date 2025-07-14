@@ -440,6 +440,20 @@ class Store_db:
         except Exception as e:
             self.logger.error(f"列出群组用户失败: {e}")
             return [], f"列出群组用户失败: {e}"
+    def list_group_permissions(self) -> tuple[list, str]:
+        """
+        列出所有的授权群组
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""SELECT group_id, start_time, end_time FROM group_information""")
+
+            groups = cursor.fetchall() 
+            return groups, None
+        except sqlite3.OperationalError as e:
+            self.logger.error(f"列出群组失败: {e}")
+            return None, f"列出群组失败: {e}"
 
     def get_manageable_users(self, group_id: str, manager_id: str) -> tuple[list, str]:
         """获取用户可以管理的用户列表

@@ -209,8 +209,28 @@
 # features = data.get('features')  # 'all'
 # print(data)
 
-msg = "123 234 123123"
-parts = msg.split(" ")
-print(parts)
+user_list = [('1732373074', 2, '1732373074'),('2712065523', 2, '1732373074')]
+users = []
+levels = []
+group_ids = []
+for user in user_list:
+    users.append(user[0])
+    levels.append(user[1])
+    group_ids.append(user[2])
+
+msg = "\n".join(
+    f"授权用户: {user}, 等级: {level}, 父级ID: {parent}"
+    for user, level, parent in user_list
+)
+
+header = "授权用户\t等级\t父级ID"
+rows = "\n".join(f"{user}\t{level}\t{parent}" for user, level, parent in user_list)
+msg = f"{header}\n{rows}"
+
+msg = "授权用户列表：\n" + "\n".join(
+    f"{i+1}. 用户ID: {user}, 等级: {level}, 父级: {parent}"
+    for i, (user, level, parent) in enumerate(user_list)
+)
+print(msg)
 
 
