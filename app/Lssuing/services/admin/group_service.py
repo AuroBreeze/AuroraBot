@@ -165,17 +165,15 @@ class GroupService:
                 self.logger.info("当前无授权群组")
                 return True, "当前无授权群组"
 
-            # 检查并处理群组状态
+            # 检查并处理即将过期群组
             current_time = datetime.now(self.bj_tz)
             kicked_groups = []
             warning_groups = []
-            normal_groups = []
             
             for group_id, starttime, endtime in groups_list:
                 try:
                     end_dt = datetime.strptime(endtime, "%Y-%m-%d %H:%M:%S").replace(tzinfo=self.bj_tz)
                     remaining_days = (end_dt - current_time).days
-                    remaining_with_buffer = remaining_days + 3  # 加上3天缓冲时间
                     
                     if remaining_days <= 0:
                         # 已过期群组
@@ -185,9 +183,6 @@ class GroupService:
                     elif remaining_days <= 3:
                         # 即将过期群组
                         warning_groups.append(f"{group_id}(剩余{remaining_days}天)")
-                    else:
-                        # 正常群组
-                        normal_groups.append(f"{group_id}(剩余{remaining_with_buffer}天)")
                 except Exception as e:
                     self.logger.error(f"处理群组 {group_id} 时出错: {e}", exc_info=True)
                     continue
@@ -199,11 +194,9 @@ class GroupService:
             if warning_groups:
                 result_msg.append(f"即将过期群组(3天内): {', '.join(warning_groups)}")
             
-            # 总是显示所有正常群组信息
-            if normal_groups:
-                result_msg.append(f"正常授权群组(含3天缓冲):\n{', '.join(normal_groups)}")
-            elif not kicked_groups and not warning_groups:
-                result_msg.append("当前无任何授权群组")
+
+            if not result_msg:
+                result_msg.append("当前无需要处理的群组")
 
             return True, "\n".join(result_msg)
             
