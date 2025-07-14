@@ -35,6 +35,10 @@ class GroupService_admin_API:
         if msg is not None:
             await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
 
+        judge, msg = await self.service.check_group_list_and_kick(self.message)
+        if msg is not None:
+            await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
+
 class GroupService:
     """1级权限，群组服务层，封装所有群组相关业务逻辑"""
     
@@ -125,6 +129,48 @@ class GroupService:
                 return False, f"取消群授权失败: {msg}"
         except Exception as e:
             return False, f"取消授权过程中发生错误: {str(e)}"
+    async def check_group_list_and_kick(self,message) -> tuple[bool, str]:
+        """
+        检查群组列表并踢出不在授权列表中的群组
+        """
+        msg = str(message.get("raw_message"))
+        if msg != "check_group_list":
+            print(msg)
+            self.logger.debug("无效的检查群组列表命令格式")
+            return False, None
+
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        print(group_id,user_id)
+         
+        # 检查用户权限
+        check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, user_id, 1)
+        if not check_judge:
+            return False, check_msg
+        
+        groups_list,msg_or_err = self.db.list_group_permissions()
+        # group_list = [('736038975', '2025-07-13 20:21:09', '2025-07-23 20:21:09')]
+        if msg_or_err is not None:
+            self.logger.error(f"获取群组列表失败: {msg_or_err}")
+            return False, msg_or_err
+
+        
+        kicked_groups = []
+        for group_id, starttime, endtime in groups_list:
+            try:
+                end_dt = datetime.strptime(endtime, "%Y-%m-%d %H:%M:%S").replace(tzinfo=self.bj_tz)
+                if (end_dt - datetime.now()).days <= 3:
+                    # 调用踢人接口（假设有 self.kick_group 方法）
+                    await self.kick_group(group_id)
+                    kicked_groups.append(group_id)
+            except Exception as e:
+                self.logger.error(f"处理群组 {group_id} 时出错: {e}")
+
+        if kicked_groups:
+            return True, f"已踢出以下即将过期群组: {', '.join(kicked_groups)}"
+        else:
+            return True, "没有需要踢出的群组"
+        
     async def help_service(self,message) -> tuple[bool, str]:
         """
         指令菜单
