@@ -45,6 +45,14 @@ class GroupService_admin_API:
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
 
+        judge,msg_or_err = await self.service.list_commodities_with_status(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
+        judge,msg_or_err = await self.service.update_plugin_status(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
 
 class GroupService:
     """1级权限，群组服务层，封装所有群组相关业务逻辑"""
@@ -144,3 +152,103 @@ class GroupService:
         except Exception as e:
             self.logger.error(f"更新商品失败, 错误信息: {e}")
             return False, f"更新商品失败: {e}"
+
+    async def update_plugin_status(self, message: dict) -> tuple[bool, str]:
+        """
+        更新插件上架状态
+        
+        :param message: 消息字典
+        :return: 成功与否，错误信息
+        """
+        msg = str(message.get("raw_message"))
+        if not msg.startswith("update_status "): # update_status <plugin_id> <status>
+            self.logger.debug("无效的更新状态格式")
+            return False, None
+
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        if self.auth.check_user_permission(user_id) is False:
+            self.logger.warning(f"用户 {user_id} 权限不足, 无法更新插件状态")
+            return False, f"用户 {user_id} 权限不足, 无法更新插件状态"
+
+        try:
+            parts = msg.split(" ")
+            if len(parts) != 3:
+                return False, "参数错误，格式应为: update_status <插件ID> <1/0>"
+            
+            plugin_id = parts[1]
+            try:
+                status = int(parts[2])
+                if status not in (0, 1):
+                    return False, "状态参数错误，应为0(下架)或1(上架)"
+            except ValueError:
+                return False, "状态参数错误，应为0(下架)或1(上架)"
+            
+            # 调用数据库方法更新状态
+            success, msg_or_err = self.db.update_plugin_status(plugin_id, bool(status))
+            return success, msg_or_err
+            
+        except Exception as e:
+            self.logger.error(f"更新插件状态失败: {e}")
+            return False, f"更新插件状态失败: {e}"
+
+    async def list_commodities_with_status(self, message: dict) -> tuple[bool, str]:
+        """
+        列出所有插件及其上架状态
+        
+        :param message: 消息字典
+        :return: 成功与否，错误信息
+        """
+        msg = str(message.get("raw_message"))
+        if msg != "list_commodities":
+            self.logger.debug("无效的列出商品格式")
+            return False, None
+
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        if self.auth.check_user_permission(user_id) is False:
+            self.logger.warning(f"用户 {user_id} 权限不足, 无法查看商品列表")
+            return False, f"用户 {user_id} 权限不足, 无法查看商品列表"
+
+        try:
+            # 获取所有商品
+            commodities, err = self.db.list_commodities()
+            if err:
+                return False, err
+            
+            if not commodities:
+                return True, "当前没有商品"
+            
+            # 获取所有上架插件
+            active_plugins, err = self.db.list_plugins_state("TRUE")
+            inactive_plugins, errs = self.db.list_plugins_state("FALSE")
+            if err:
+                return False, err
+            
+            print(active_plugins, inactive_plugins)
+            
+            # 构建插件状态字典
+            active_plugin_names = {p["plugin_name"] for p in active_plugins}
+            
+            # 构建响应消息
+            max_id_length = max(len(str(c["name"])) for c in commodities) if commodities else 0
+            col_width = max(max_id_length, 8)  # 至少8个字符宽度
+            
+            response = "商品状态列表:\n"
+            separator = "-" * (col_width + 10)
+            response += separator + "\n"
+            response += f"{'商品名称':<{col_width}} 上架状态\n"
+            response += separator + "\n"
+            
+            for commodity in commodities:
+                status = "上架" if commodity["name"] in active_plugin_names else "下架"
+                response += f"{commodity['name']:<{col_width}}   {status}\n"
+            
+            response += separator
+            
+            return True, response
+        except Exception as e:
+            self.logger.error(f"列出商品状态失败: {e}")
+            return False, f"列出商品状态失败: {e}"

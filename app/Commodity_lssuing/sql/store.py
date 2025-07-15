@@ -52,12 +52,12 @@ class Store:
         )
         """)
 
-        # 创建插件持有表
+        # 创建商品持有表
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS plugin_ownership (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             qq_id TEXT NOT NULL,         -- QQ号
-            plugin_id TEXT NOT NULL,     -- 插件ID
+            plugin_id TEXT NOT NULL,     -- 商品ID
             purchase_id INTEGER,         -- 关联的购买记录ID
             create_time DATETIME DEFAULT CURRENT_TIMESTAMP, -- 购买时间
             FOREIGN KEY (purchase_id) REFERENCES purchase_records(id) ON DELETE SET NULL
@@ -91,6 +91,23 @@ class Store:
         ON plugin_ownership(qq_id)
         """)
 
+        # 创建商品状态表
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS plugin_status (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plugin_name TEXT NOT NULL,
+            is_active BOOLEAN DEFAULT TRUE,
+            update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (plugin_name) REFERENCES commodities(name) ON DELETE CASCADE,
+            UNIQUE(plugin_name)
+        )
+        """)
+
+        # 创建商品状态索引
+        cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_plugin_status 
+        ON plugin_status(plugin_name)
+        """)
         
         self.conn.commit()
     def add_commodity(self, name: str, chinese_name: str, price: float, notes: str = None, is_welfare: bool = False) -> tuple[bool, str]:
@@ -113,14 +130,28 @@ class Store:
             if cursor.fetchone():
                 return False, f"商品 {name} 已存在"
             
-            # 添加新商品
-            cursor.execute("""
-            INSERT INTO commodities (name, chinese_name, price, notes, is_welfare)
-            VALUES (?, ?, ?, ?, ?)
-            """, (name, chinese_name, price, notes, is_welfare))
-        
-            conn.commit()
-            return True, f"商品 {name}({chinese_name}) 添加成功"
+            # 开始事务
+            conn.execute("BEGIN TRANSACTION")
+            
+            try:
+                # 添加新商品
+                cursor.execute("""
+                INSERT INTO commodities (name, chinese_name, price, notes, is_welfare)
+                VALUES (?, ?, ?, ?, ?)
+                """, (name, chinese_name, price, notes, is_welfare))
+                
+                # 默认设置为上架状态
+                cursor.execute("""
+                INSERT INTO plugin_status (plugin_name, is_active)
+                VALUES (?, TRUE)
+                """, (name,))
+                
+                conn.commit()
+                return True, f"商品 {name}({chinese_name}) 添加成功并已上架"
+                
+            except Exception as e:
+                conn.rollback()
+                raise e
         except Exception as e:
             self.logger.error(f"添加商品失败: {e}")
             return False, f"添加商品失败: {e}"
@@ -128,7 +159,7 @@ class Store:
     def update_commodity(self, name: str, chinese_name: str = None, price: float = None, notes: str = None, is_welfare: bool = None) -> tuple[bool, str]:
         """
         更新商品信息
-        
+    
         :param name: 商品名称(用于查找)
         :param chinese_name: 新中文名称(可选)
         :param price: 新售价(可选)
@@ -139,46 +170,47 @@ class Store:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
+        
+            # 先检查商品是否存在
+            cursor.execute("SELECT 1 FROM commodities WHERE name = ?", (name,))
+            if not cursor.fetchone():
+                return False, f"商品 {name} 不存在"
             
             # 构建更新语句
             updates = []
             params = []
-            
+        
             if chinese_name is not None:
                 updates.append("chinese_name = ?")
                 params.append(chinese_name)
-                
+            
             if price is not None:
                 updates.append("price = ?")
                 params.append(price)
-                
+            
             if notes is not None:
                 updates.append("notes = ?")
                 params.append(notes)
-                
+            
             if is_welfare is not None:
                 updates.append("is_welfare = ?")
                 params.append(is_welfare)
-                
+            
             if not updates:
                 return False, "没有提供更新内容"
-                
+            
             # 添加更新时间
             updates.append("update_time = CURRENT_TIMESTAMP")
-            
+        
             params.append(name)  # 最后添加WHERE条件参数
-            
+        
             query = f"""
             UPDATE commodities 
             SET {', '.join(updates)}
             WHERE name = ?
             """
-            
+        
             cursor.execute(query, params)
-            
-            if cursor.rowcount == 0:
-                return False, f"商品 {name} 不存在"
-                
             conn.commit()
             return True, f"商品 {name} 更新成功"
         except Exception as e:
@@ -387,10 +419,10 @@ class Store:
 
     def add_plugin_ownership(self, qq_id: str, plugin_id: str, purchase_id: int) -> tuple[bool, str]:
         """
-        添加插件持有记录
+        添加商品持有记录
         
         :param qq_id: QQ号
-        :param plugin_id: 插件ID
+        :param plugin_id: 商品ID
         :param purchase_id: 关联的购买记录ID
         :return: (是否成功, 错误信息)
         """
@@ -404,17 +436,17 @@ class Store:
             """, (qq_id, plugin_id, purchase_id))
             
             conn.commit()
-            return True, f"用户{qq_id}插件{plugin_id}持有记录添加成功"
+            return True, f"用户{qq_id}商品{plugin_id}持有记录添加成功"
         except Exception as e:
-            self.logger.error(f"添加插件持有记录失败: {e}")
-            return False, f"添加插件持有记录失败: {e}"
+            self.logger.error(f"添加商品持有记录失败: {e}")
+            return False, f"添加商品持有记录失败: {e}"
 
     def get_user_plugins(self, qq_id: str) -> tuple[list, str]:
         """
-        获取用户持有的插件
+        获取用户持有的商品
         
         :param qq_id: QQ号
-        :return: (插件列表, 错误信息)
+        :return: (商品列表, 错误信息)
         """
         try:
             conn = self._get_connection()
@@ -437,8 +469,8 @@ class Store:
                 
             return plugins, None
         except Exception as e:
-            self.logger.error(f"获取用户插件失败: {e}")
-            return [], f"获取用户插件失败: {e}"
+            self.logger.error(f"获取用户商品失败: {e}")
+            return [], f"获取用户商品失败: {e}"
 
     def get_group_purchase_summary(self, group_id: str) -> tuple[dict, str]:
         """
@@ -471,8 +503,98 @@ class Store:
             self.logger.error(f"获取群组消费汇总失败: {e}")
             return None, f"获取群组消费汇总失败: {e}"
 
+    def update_plugin_status(self, plugin_name: str, is_active: bool) -> tuple[bool, str]:
+        """
+        更新商品上下架状态
+        
+        :param plugin_id: 商品ID
+        :param is_active: 是否上架
+        :return: (是否成功, 错误信息)
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            # 先检查商品是否存在
+            cursor.execute("SELECT 1 FROM plugin_status WHERE plugin_name = ?", (plugin_name,))
+            if not cursor.fetchone():
+                return False, f"商品 {plugin_name} 不存在"
+
+            # 更新或插入状态记录
+            cursor.execute("""
+            INSERT OR REPLACE INTO plugin_status (plugin_name, is_active)
+            VALUES (?, ?)
+            """, (plugin_name, is_active))
+            
+            conn.commit()
+            status = "上架" if is_active else "下架"
+            return True, f"商品 {plugin_name} 已{status}"
+        except Exception as e:
+            self.logger.error(f"更新商品状态失败: {e}")
+            return False, f"更新商品状态失败: {e}"
+
+    def get_plugin_status(self, plugin_name: str) -> tuple[bool, str]:
+        """
+        获取商品状态
+        
+        :param plugin_id: 商品ID
+        :return: (是否上架, 错误信息)
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+            SELECT is_active FROM plugin_status 
+            WHERE plugin_name = ?
+            """, (plugin_name,))
+            
+            result = cursor.fetchone()
+            if not result:
+                # 默认返回True(上架)如果记录不存在
+                return True, None
+                
+            return bool(result[0]), None
+        except Exception as e:
+            self.logger.error(f"获取商品状态失败: {e}")
+            return False, f"获取商品状态失败: {e}"
+
+    def list_plugins_state(self,state:str = "TRUE") -> tuple[list, str]:
+        """
+        列出所有上架商品
+        
+        :return: (商品列表, 错误信息)
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            if state == "TRUE":
+                cursor.execute("""
+                SELECT plugin_name FROM plugin_status 
+                WHERE is_active = TRUE
+                """)
+            elif state == "FALSE":
+                cursor.execute("""
+                SELECT plugin_name FROM plugin_status 
+                WHERE is_active = FALSE
+                """)
+            else:
+                return [], "函数list_plugins_state()参数错误"
+            
+            results = cursor.fetchall()
+            plugins = [{"plugin_name": row[0]} for row in results]
+            return plugins, None
+        except Exception as e:
+            if state == "TRUE":
+                self.logger.error(f"列出上架商品失败: {e}")
+            else:
+                self.logger.error(f"列出下架商品失败: {e}")
+            return [], f"列出商品失败: {e}"
+
+
     def __str__(self):
-        return "商品存储数据库(包含购买记录和插件持有记录)"
+        return "商品存储数据库(包含购买记录、商品持有记录和商品状态)"
 
 if __name__ == '__main__':
     store = Store()
