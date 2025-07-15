@@ -152,6 +152,7 @@ class UserService:
 
         try:
             qq_id = str(message.get("user_id"))
+            # 调用 get_purchase_records 方法时移除 group_id 参数
             user_info, err = self.db.list_user_info(qq_id)
             if err:
                 return False, err

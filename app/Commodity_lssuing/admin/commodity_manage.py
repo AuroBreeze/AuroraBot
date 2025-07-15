@@ -21,47 +21,6 @@ class AuthManager:
         """
         return manage_cfg.ADMIN_ID == str(executor_id) # 只有管理员可以管理商品
 
-class GroupService_admin_API:
-    """群组服务层，封装所有admin权限群组相关业务逻辑"""
-    def __init__(self,websocket, message):
-        self.logger = Logger("Commodity_admin_API")
-        self.db = Store()
-        self.auth = AuthManager()
-        self.service = GroupService(self.db)
-        self.websocket = websocket
-        self.message = message
-    async def handle_event(self) -> None:
-        """
-        统一处理各种事件
-        """
-        if self.message.get("message_type") != "group":
-            return
-        
-        judge,msg_or_err = await self.service.add_commodity(self.message)
-        if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
-
-        judge,msg_or_err = await self.service.update_commodity(self.message)
-        if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
-
-        judge,msg_or_err = await self.service.list_commodities_with_status(self.message)
-        if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
-
-        judge,msg_or_err = await self.service.update_plugin_status(self.message)
-        if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
-        
-        judge,msg_or_err = await self.service.get_user_info(self.message)
-        if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
-
-        judge,msg_or_err = await self.service.delete_commodity(self.message)
-        if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
-
-
 class GroupService:
     """1级权限，群组服务层，封装所有群组相关业务逻辑"""
     def __init__(self, db: Store):
@@ -259,6 +218,42 @@ class GroupService:
         except Exception as e:
             self.logger.error(f"列出商品状态失败: {e}")
             return False, f"列出商品状态失败: {e}"
+
+    async def add_plugin_ownership(self, message: dict) -> tuple[bool, str]:
+        """
+        为用户添加商品持有记录
+        
+        :param message: 消息字典
+        :return: 成功与否，错误信息
+        """
+        msg = str(message.get("raw_message"))
+        if not msg.startswith("add_ownership "): # add_ownership <qq_id> <plugin_name>
+            self.logger.debug("无效的添加持有记录格式")
+            return False, None
+
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        if self.auth.check_user_permission(user_id) is False:
+            self.logger.warning(f"用户 {user_id} 权限不足, 无法添加持有记录")
+            return False, f"用户 {user_id} 权限不足, 无法添加持有记录"
+
+        try:
+            parts = msg.split(" ")
+            if len(parts) != 3:
+                return False, "参数错误，格式应为: add_ownership [QQ号] [插件名称]"
+            
+            target_qq = parts[1]
+            plugin_name = parts[2]
+            
+            # 调用数据库添加持有记录
+            success, msg_or_err = self.db.add_plugin_ownership(target_qq, plugin_name)
+            return success, msg_or_err
+            
+        except Exception as e:
+            self.logger.error(f"添加持有记录失败: {e}")
+            return False, f"添加持有记录失败: {e}"
+
     async def get_user_info(self, message: dict) -> tuple[bool, str]:
         """
         获取用户信息(消费金额和插件持有情况)
@@ -351,3 +346,48 @@ class GroupService:
         except Exception as e:
             self.logger.error(f"删除商品失败: {e}")
             return False, f"删除商品失败: {e}"
+
+class GroupService_admin_API:
+    """群组服务层，封装所有admin权限群组相关业务逻辑"""
+    def __init__(self,websocket, message):
+        self.logger = Logger("Commodity_admin_API")
+        self.db = Store()
+        self.auth = AuthManager()
+        self.service = GroupService(self.db)
+        self.websocket = websocket
+        self.message = message
+    async def handle_event(self) -> None:
+        """
+        统一处理各种事件
+        """
+        if self.message.get("message_type") != "group":
+            return
+        
+        judge,msg_or_err = await self.service.add_commodity(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
+        judge,msg_or_err = await self.service.update_commodity(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
+        judge,msg_or_err = await self.service.list_commodities_with_status(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
+        judge,msg_or_err = await self.service.update_plugin_status(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+        
+        judge,msg_or_err = await self.service.add_plugin_ownership(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+        
+        judge,msg_or_err = await self.service.get_user_info(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
+        judge,msg_or_err = await self.service.delete_commodity(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+

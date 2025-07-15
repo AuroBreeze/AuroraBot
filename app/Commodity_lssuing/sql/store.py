@@ -41,14 +41,14 @@ class Store:
         )
         """)
 
-        # 创建购买记录表(仅记录消费信息)
+        # 创建购买记录表（移除 group_id 列）
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS purchase_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            group_id TEXT NOT NULL,     -- 群号
             qq_id TEXT NOT NULL,         -- QQ号
             amount REAL NOT NULL,        -- 消费金额
-            purchase_time DATETIME DEFAULT CURRENT_TIMESTAMP
+            purchase_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(qq_id)  -- 唯一约束改为 qq_id
         )
         """)
 
@@ -74,11 +74,6 @@ class Store:
         cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_commodity_chinese_name 
         ON commodities(chinese_name)
-        """)
-
-        cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_purchase_group 
-        ON purchase_records(group_id)
         """)
 
         cursor.execute("""
@@ -342,11 +337,10 @@ class Store:
             self.logger.error(f"搜索商品失败: {e}")
             return [], f"搜索商品失败: {e}"
 
-    def add_purchase_record(self, group_id: str, qq_id: str, amount: float) -> tuple[bool, int, str]:
+    def add_purchase_record(self, qq_id: str, amount: float) -> tuple[bool, int, str]:
         """
         添加购买记录(仅记录消费)
         
-        :param group_id: 群号
         :param qq_id: QQ号
         :param amount: 消费金额
         :return: (是否成功, 记录ID, 错误信息)
@@ -355,23 +349,42 @@ class Store:
             conn = self._get_connection()
             cursor = conn.cursor()
 
+            # 先检查记录是否存在（移除 group_id 条件）
             cursor.execute("""
-            INSERT INTO purchase_records (group_id, qq_id, amount)
-            VALUES (?, ?, ?)
-            """, (group_id, qq_id, amount))
+            SELECT id, amount FROM purchase_records 
+            WHERE qq_id = ?
+            """, (qq_id,))
+            existing_record = cursor.fetchone()
             
-            record_id = cursor.lastrowid
-            conn.commit()
-            return True, record_id, f"群{group_id}用户{qq_id}消费记录添加成功"
+            if existing_record:
+                # 存在则更新金额
+                record_id = existing_record[0]
+                new_amount = existing_record[1] + amount
+                cursor.execute("""
+                UPDATE purchase_records 
+                SET amount = ?, purchase_time = CURRENT_TIMESTAMP 
+                WHERE id = ?
+                """, (new_amount, record_id))
+                conn.commit()
+                return True, record_id, f"用户{qq_id}消费记录更新成功，总金额{new_amount:.2f}"
+            else:
+                # 不存在则插入新记录（移除 group_id）
+                cursor.execute("""
+                INSERT INTO purchase_records (qq_id, amount)
+                VALUES (?, ?)
+                """, (qq_id, amount))
+                record_id = cursor.lastrowid
+                conn.commit()
+                return True, record_id, f"用户{qq_id}消费记录添加成功"
+                
         except Exception as e:
-            self.logger.error(f"添加购买记录失败: {e}")
-            return False, f"添加购买记录失败: {e}"
+            self.logger.error(f"添加/更新购买记录失败: {e}")
+            return False, None, f"添加/更新购买记录失败: {e}"
 
-    def get_purchase_records(self, group_id: str = None, qq_id: str = None) -> tuple[list, str]:
+    def get_purchase_records(self, qq_id: str = None) -> tuple[list, str]:
         """
         获取消费记录
         
-        :param group_id: 群号(可选)
         :param qq_id: QQ号(可选)
         :return: (消费记录列表, 错误信息)
         """
@@ -380,21 +393,14 @@ class Store:
             cursor = conn.cursor()
 
             query = """
-            SELECT id, group_id, qq_id, amount, purchase_time
+            SELECT id, qq_id, amount, purchase_time
             FROM purchase_records
             """
             params = []
 
-            conditions = []
-            if group_id:
-                conditions.append("group_id = ?")
-                params.append(group_id)
             if qq_id:
-                conditions.append("qq_id = ?")
+                query += " WHERE qq_id = ?"
                 params.append(qq_id)
-
-            if conditions:
-                query += " WHERE " + " AND ".join(conditions)
 
             query += " ORDER BY purchase_time DESC"
 
@@ -406,10 +412,9 @@ class Store:
             for row in results:
                 records.append({
                     "id": row[0],
-                    "group_id": row[1],
-                    "qq_id": row[2],
-                    "amount": row[3],
-                    "purchase_time": row[4]
+                    "qq_id": row[1],
+                    "amount": row[2],
+                    "purchase_time": row[3]
                 })
                 
             return records, None
@@ -417,25 +422,41 @@ class Store:
             self.logger.error(f"获取购买记录失败: {e}")
             return [], f"获取购买记录失败: {e}"
 
-    def add_plugin_ownership(self, qq_id: str, plugin_name: str) -> tuple[bool, str]:
+    def add_plugin_ownership(self, qq_id: str, plugin_name: str, amount: float = None) -> tuple[bool, str]:
         """
-        添加商品持有记录
+        添加商品持有记录并记录购买信息
         
         :param qq_id: QQ号
         :param plugin_name: 商品名称
+        :param amount: 消费金额(可选，如果None则查询商品价格)
         :return: (是否成功, 错误信息)
         """
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
 
-            cursor.execute("""
-            INSERT INTO plugin_ownership (qq_id, plugin_name)
-            VALUES (?, ?)
-            """, (qq_id, plugin_name))
+            # 开始事务
+            conn.execute("BEGIN TRANSACTION")
             
-            conn.commit()
-            return True, f"用户 {qq_id} 商品{plugin_name}持有记录添加成功"
+            try:
+                # 获取商品价格(如果amount未提供)
+                if amount is None:
+                    cursor.execute("SELECT price FROM commodities WHERE name = ?", (plugin_name,))
+                    result = cursor.fetchone()
+                    if not result:
+                        conn.commit()
+                        return False, f"商品 {plugin_name} 不存在"
+                    amount = result[0]
+
+                # 添加购买记录
+                self.add_purchase_record(qq_id, amount)
+
+                conn.commit()
+                return True, f"用户 {qq_id} 商品{plugin_name}持有记录添加成功，消费金额{amount}已记录"
+                
+            except Exception as e:
+                conn.rollback()
+                raise e
         except Exception as e:
             self.logger.error(f"添加商品持有记录失败: {e}")
             return False, f"添加商品持有记录失败: {e}"
@@ -470,37 +491,6 @@ class Store:
         except Exception as e:
             self.logger.error(f"获取用户商品失败: {e}")
             return [], f"获取用户商品失败: {e}"
-
-    def get_group_purchase_summary(self, group_id: str) -> tuple[dict, str]:
-        """
-        获取群组消费汇总
-        
-        :param group_id: 群号
-        :return: (汇总信息, 错误信息)
-        """
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-
-            # 获取总消费额
-            cursor.execute("""
-            SELECT SUM(amount) FROM purchase_records WHERE group_id = ?
-            """, (group_id,))
-            total_amount = cursor.fetchone()[0] or 0
-
-            # 获取购买人数
-            cursor.execute("""
-            SELECT COUNT(DISTINCT qq_id) FROM purchase_records WHERE group_id = ?
-            """, (group_id,))
-            buyer_count = cursor.fetchone()[0] or 0
-
-            return {
-                "total_amount": total_amount,
-                "buyer_count": buyer_count
-            }, None
-        except Exception as e:
-            self.logger.error(f"获取群组消费汇总失败: {e}")
-            return None, f"获取群组消费汇总失败: {e}"
 
     def update_plugin_status(self, plugin_name: str, is_active: bool) -> tuple[bool, str]:
         """
@@ -621,7 +611,7 @@ class Store:
                     "notes": commodity["notes"]
                 })
 
-            # 获取消费记录
+            # 获取消费记录（移除 group_id 参数）
             records, err = self.get_purchase_records(qq_id=qq_id)
             if err:
                 return None, err
