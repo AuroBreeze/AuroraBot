@@ -201,7 +201,7 @@ class GroupService:
         :return: 成功与否，错误信息
         """
         msg = str(message.get("raw_message"))
-        if msg != "list_commodities":
+        if msg != "list_commodities_status":
             self.logger.debug("无效的列出商品格式")
             return False, None
 
@@ -227,7 +227,6 @@ class GroupService:
             if err:
                 return False, err
             
-            print(active_plugins, inactive_plugins)
             
             # 构建插件状态字典
             active_plugin_names = {p["plugin_name"] for p in active_plugins}
@@ -239,11 +238,11 @@ class GroupService:
             response = "商品状态列表:\n"
             separator = "-" * (col_width + 10)
             response += separator + "\n"
-            response += f"{'商品名称':<{col_width}} 上架状态\n"
+            response += f"{'商品名称':<{col_width}}上架状态\n"
             response += separator + "\n"
             
             for commodity in commodities:
-                status = "上架" if commodity["name"] in active_plugin_names else "下架"
+                status = "1" if commodity["name"] in active_plugin_names else "0"
                 response += f"{commodity['name']:<{col_width}}   {status}\n"
             
             response += separator
