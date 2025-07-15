@@ -1,7 +1,8 @@
 from config import env
 import os
 
-ADMIN_GROUP_ID = "" # 管理员群组ID,管理员在该群进行权限管理
+ADMIN_ID = "" if not env.QQ_ADMIN else env.QQ_ADMIN # 管理员群组ID,管理员在该群进行权限管理
+
 DB_PATH = "./store/db/"# database path 数据库路径
 TIMEZONE = 'Asia/Shanghai' # Timezone 时区
 

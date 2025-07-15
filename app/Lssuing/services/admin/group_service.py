@@ -11,8 +11,6 @@ class GroupService_admin_API:
     """群组服务层，封装所有admin权限群组相关业务逻辑"""
     def __init__(self,websocket, message):
         self.logger = Logger("Lssuing_group_service")
-        self.db = Store_db()
-        self.auth = AuthManager(self.db)
         self.service = GroupService(self.db)
         self.websocket = websocket
         self.message = message
