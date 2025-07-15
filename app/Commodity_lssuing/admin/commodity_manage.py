@@ -52,6 +52,14 @@ class GroupService_admin_API:
         judge,msg_or_err = await self.service.update_plugin_status(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+        
+        judge,msg_or_err = await self.service.get_user_info(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
+        judge,msg_or_err = await self.service.delete_commodity(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
 
 
 class GroupService:
@@ -251,3 +259,95 @@ class GroupService:
         except Exception as e:
             self.logger.error(f"列出商品状态失败: {e}")
             return False, f"列出商品状态失败: {e}"
+    async def get_user_info(self, message: dict) -> tuple[bool, str]:
+        """
+        获取用户信息(消费金额和插件持有情况)
+        
+        :param message: 消息字典
+        :return: 成功与否，错误信息
+        """
+        msg = str(message.get("raw_message"))
+        if not msg.startswith("user_info "):
+            self.logger.debug("无效的用户信息查询格式")
+            return False, None
+
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        if self.auth.check_user_permission(user_id) is False:
+            self.logger.warning(f"用户 {user_id} 权限不足, 无法查询用户信息")
+            return False, f"用户 {user_id} 权限不足, 无法查询用户信息"
+
+        try:
+            parts = msg.split(" ")
+            if len(parts) != 2:
+                return False, "参数错误，格式应为: user_info [QQ号]"
+            
+            target_qq = parts[1]
+            user_info, err = self.db.list_user_info(target_qq)
+            if err:
+                return False, err
+            
+            if not user_info:
+                return True, f"用户 {target_qq} 暂无消费记录和插件持有信息"
+            
+            # 构建响应消息
+            response = f"用户 {target_qq} 信息:\n"
+            response += f"总消费金额: ¥{user_info['total_spent']:.2f}\n"
+            response += f"持有插件数: {len(user_info['plugins'])}\n"
+            
+            if user_info["latest_purchase"]:
+                response += f"最近消费时间: {user_info['latest_purchase']}\n"
+            
+            if user_info["plugins"]:
+                response += "\n插件列表:\n"
+                separator = "-" * 50
+                response += separator + "\n"
+                response += f"{'插件名称':<15} {'中文名':<15} {'价格':<8} {'备注'}\n"
+                response += separator + "\n"
+                
+                for plugin in user_info["plugins"]:
+                    response += (
+                        f"{plugin['name']:<15} "
+                        f"{plugin['chinese_name']:<15} "
+                        f"¥{plugin['price']:<7.2f} "
+                        f"{plugin['notes'] or '无'}\n"
+                    )
+                
+                response += separator
+            
+            return True, response
+        except Exception as e:
+            self.logger.error(f"获取用户信息失败: {e}")
+            return False, f"获取用户信息失败: {e}"
+    async def delete_commodity(self, message: dict) -> tuple[bool, str]:
+        """
+        删除商品
+        
+        :param message: 消息字典
+        :return: 成功与否，错误信息
+        """
+        msg = str(message.get("raw_message"))
+        if not msg.startswith("delete_commodity "):  # delete_commodity <name>
+            self.logger.debug("无效的删除商品格式")
+            return False, None
+
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        if self.auth.check_user_permission(user_id) is False:
+            self.logger.warning(f"用户 {user_id} 权限不足, 无法删除商品")
+            return False, f"用户 {user_id} 权限不足, 无法删除商品"
+
+        try:
+            parts = msg.split(" ")
+            if len(parts) != 2:
+                return False, "参数错误，格式应为: delete_commodity <商品名称>"
+            
+            name = parts[1]
+            success, msg_or_err = self.db.delete_commodity(name)
+            return success, msg_or_err
+            
+        except Exception as e:
+            self.logger.error(f"删除商品失败: {e}")
+            return False, f"删除商品失败: {e}"

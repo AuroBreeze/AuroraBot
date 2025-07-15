@@ -57,11 +57,11 @@ class Store:
         CREATE TABLE IF NOT EXISTS plugin_ownership (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             qq_id TEXT NOT NULL,         -- QQ号
-            plugin_id TEXT NOT NULL,     -- 商品ID
-            purchase_id INTEGER,         -- 关联的购买记录ID
+            plugin_name TEXT NOT NULL,   -- 商品名称
             create_time DATETIME DEFAULT CURRENT_TIMESTAMP, -- 购买时间
-            FOREIGN KEY (purchase_id) REFERENCES purchase_records(id) ON DELETE SET NULL
-            FOREIGN KEY (qq_id) REFERENCES users(qq_id) ON DELETE CASCADE -- 约束用户表的删除行为
+            FOREIGN KEY (qq_id) REFERENCES purchase_records(qq_id) ON DELETE CASCADE, -- 约束用户表的删除行为
+            FOREIGN KEY (plugin_name) REFERENCES commodities(name) ON DELETE CASCADE, -- 约束商品表的删除行为
+            UNIQUE (qq_id, plugin_name)
         )
         """)
 
@@ -417,13 +417,12 @@ class Store:
             self.logger.error(f"获取购买记录失败: {e}")
             return [], f"获取购买记录失败: {e}"
 
-    def add_plugin_ownership(self, qq_id: str, plugin_id: str, purchase_id: int) -> tuple[bool, str]:
+    def add_plugin_ownership(self, qq_id: str, plugin_name: str) -> tuple[bool, str]:
         """
         添加商品持有记录
         
         :param qq_id: QQ号
-        :param plugin_id: 商品ID
-        :param purchase_id: 关联的购买记录ID
+        :param plugin_name: 商品名称
         :return: (是否成功, 错误信息)
         """
         try:
@@ -431,12 +430,12 @@ class Store:
             cursor = conn.cursor()
 
             cursor.execute("""
-            INSERT INTO plugin_ownership (qq_id, plugin_id, purchase_id)
-            VALUES (?, ?, ?)
-            """, (qq_id, plugin_id, purchase_id))
+            INSERT INTO plugin_ownership (qq_id, plugin_name)
+            VALUES (?, ?)
+            """, (qq_id, plugin_name))
             
             conn.commit()
-            return True, f"用户{qq_id}商品{plugin_id}持有记录添加成功"
+            return True, f"用户 {qq_id} 商品{plugin_name}持有记录添加成功"
         except Exception as e:
             self.logger.error(f"添加商品持有记录失败: {e}")
             return False, f"添加商品持有记录失败: {e}"
@@ -453,7 +452,7 @@ class Store:
             cursor = conn.cursor()
 
             cursor.execute("""
-            SELECT plugin_id 
+            SELECT plugin_name 
             FROM plugin_ownership 
             WHERE qq_id = ?
             ORDER BY create_time DESC
@@ -464,7 +463,7 @@ class Store:
             
             for row in results:
                 plugins.append({
-                    "plugin_id": row[0]
+                    "plugin_name": row[0]
                 })
                 
             return plugins, None
@@ -592,6 +591,58 @@ class Store:
                 self.logger.error(f"列出下架商品失败: {e}")
             return [], f"列出商品失败: {e}"
 
+
+    def list_user_info(self, qq_id: str) -> tuple[dict, str]:
+        """
+        获取用户信息(拥有的插件和消费金额)
+        
+        :param qq_id: QQ号
+        :return: (用户信息字典, 错误信息)
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            # 获取用户拥有的插件
+            plugins, err = self.get_user_plugins(qq_id)
+            if err:
+                return None, err
+
+            # 获取插件详细信息
+            plugin_details = []
+            for plugin in plugins:
+                commodity, err = self.get_commodity(plugin["plugin_name"])
+                if err:
+                    continue  # 跳过无效商品
+                plugin_details.append({
+                    "name": commodity["name"],
+                    "chinese_name": commodity["chinese_name"],
+                    "price": commodity["price"],
+                    "notes": commodity["notes"]
+                })
+
+            # 获取消费记录
+            records, err = self.get_purchase_records(qq_id=qq_id)
+            if err:
+                return None, err
+
+            # 计算总消费金额
+            total_spent = sum(record["amount"] for record in records)
+            
+            # 获取最近消费时间
+            latest_purchase = max(record["purchase_time"] for record in records) if records else None
+
+            return {
+                "qq_id": qq_id,
+                "plugins": plugin_details,
+                "total_spent": total_spent,
+                "latest_purchase": latest_purchase,
+                "purchase_count": len(records)
+            }, None
+
+        except Exception as e:
+            self.logger.error(f"获取用户信息失败: {e}")
+            return None, f"获取用户信息失败: {e}"
 
     def __str__(self):
         return "商品存储数据库(包含购买记录、商品持有记录和商品状态)"
