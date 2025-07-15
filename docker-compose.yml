@@ -2,7 +2,7 @@ version: "3"
 services:
     aurorabot:
         environment:
-            - ACCOUNT=2712065523
+            - ACCOUNT=3552638520
             - WS_ENABLE=true
         ports:
             - 3001:3001
