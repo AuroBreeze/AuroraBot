@@ -11,7 +11,7 @@ class GroupService_admin_API:
     """群组服务层，封装所有admin权限群组相关业务逻辑"""
     def __init__(self,websocket, message):
         self.logger = Logger("Lssuing_group_service")
-        self.service = GroupService(self.db)
+        self.service = GroupService(db=Store_db())
         self.websocket = websocket
         self.message = message
     async def handle_event(self) -> None:
@@ -141,7 +141,7 @@ class GroupService:
             msg = str(message.get("raw_message"))
             if msg != "check_group_list":
                 self.logger.debug(f"收到无效命令: {msg}")
-                return False, "无效命令，请使用'check_group_list'检查群组"
+                return False, None
 
             group_id = message.get("group_id")
             user_id = str(message.get("user_id"))

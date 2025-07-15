@@ -1,5 +1,5 @@
 import sqlite3
-from ... import config
+from .. import manage_cfg
 from api.Logger_owner import Logger
 import pytz
 from datetime import datetime
@@ -10,7 +10,7 @@ class Store:
     """
     def __init__(self):
         self.logger = Logger("Commodity_store")
-        self.db_path = config.DB_PATH + "commodity_store.db"
+        self.db_path = manage_cfg.DB_PATH + "commodity_store.db"
         self.timezone = "Asia/Shanghai"
         self.bj_tz = pytz.timezone(self.timezone)
         self.conn = None
@@ -91,21 +91,12 @@ class Store:
         ON plugin_ownership(qq_id)
         """)
 
-        cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_plugin_expire 
-        ON plugin_ownership(expire_time)
-        """)
         
         self.conn.commit()
-
-    # [保留原有所有方法实现，内容不变...]
-    # 包括 add_commodity, update_commodity, get_commodity, delete_commodity,
-    # list_commodities, search_commodities, add_purchase_record, get_purchase_records,
-    # add_plugin_ownership, get_user_plugins, get_group_purchase_summary 等方法
     def add_commodity(self, name: str, chinese_name: str, price: float, notes: str = None, is_welfare: bool = False) -> tuple[bool, str]:
         """
         添加商品
-        
+    
         :param name: 商品名称
         :param chinese_name: 中文名称
         :param price: 售价
@@ -116,16 +107,20 @@ class Store:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
+        
+            # 先检查商品是否存在
+            cursor.execute("SELECT 1 FROM commodities WHERE name = ?", (name,))
+            if cursor.fetchone():
+                return False, f"商品 {name} 已存在"
             
+            # 添加新商品
             cursor.execute("""
             INSERT INTO commodities (name, chinese_name, price, notes, is_welfare)
             VALUES (?, ?, ?, ?, ?)
             """, (name, chinese_name, price, notes, is_welfare))
-            
+        
             conn.commit()
             return True, f"商品 {name}({chinese_name}) 添加成功"
-        except sqlite3.IntegrityError:
-            return False, f"商品 {name} 已存在"
         except Exception as e:
             self.logger.error(f"添加商品失败: {e}")
             return False, f"添加商品失败: {e}"
@@ -390,14 +385,13 @@ class Store:
             self.logger.error(f"获取购买记录失败: {e}")
             return [], f"获取购买记录失败: {e}"
 
-    def add_plugin_ownership(self, qq_id: str, plugin_id: str, purchase_id: int, expire_time: str = None) -> tuple[bool, str]:
+    def add_plugin_ownership(self, qq_id: str, plugin_id: str, purchase_id: int) -> tuple[bool, str]:
         """
         添加插件持有记录
         
         :param qq_id: QQ号
         :param plugin_id: 插件ID
         :param purchase_id: 关联的购买记录ID
-        :param expire_time: 过期时间(可选)
         :return: (是否成功, 错误信息)
         """
         try:
@@ -405,9 +399,9 @@ class Store:
             cursor = conn.cursor()
 
             cursor.execute("""
-            INSERT INTO plugin_ownership (qq_id, plugin_id, purchase_id, expire_time)
-            VALUES (?, ?, ?, ?)
-            """, (qq_id, plugin_id, purchase_id, expire_time))
+            INSERT INTO plugin_ownership (qq_id, plugin_id, purchase_id)
+            VALUES (?, ?, ?)
+            """, (qq_id, plugin_id, purchase_id))
             
             conn.commit()
             return True, f"用户{qq_id}插件{plugin_id}持有记录添加成功"
@@ -427,9 +421,9 @@ class Store:
             cursor = conn.cursor()
 
             cursor.execute("""
-            SELECT plugin_id, expire_time 
+            SELECT plugin_id 
             FROM plugin_ownership 
-            WHERE qq_id = ? AND (expire_time IS NULL OR expire_time > CURRENT_TIMESTAMP)
+            WHERE qq_id = ?
             ORDER BY create_time DESC
             """, (qq_id,))
             
@@ -438,8 +432,7 @@ class Store:
             
             for row in results:
                 plugins.append({
-                    "plugin_id": row[0],
-                    "expire_time": row[1]
+                    "plugin_id": row[0]
                 })
                 
             return plugins, None

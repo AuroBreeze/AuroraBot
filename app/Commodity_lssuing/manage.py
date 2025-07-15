@@ -1,4 +1,5 @@
 from api.Logger_owner import Logger
+from .admin.commodity_manage import GroupService_admin_API
 
 class Manage():
     def __init__(self, websocket, message):
@@ -17,4 +18,5 @@ class Manage_authorization_API():
         self.websocket = websocket
 
     async def handle_event(self) -> tuple[bool, str]:
+        await GroupService_admin_API(self.websocket, self.message).handle_event()
         pass
