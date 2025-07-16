@@ -226,8 +226,7 @@ class GroupService:
         :param message: 消息字典
         :return: 成功与否，错误信息
         """
-        msg = str(message.get("raw_message"))
-        if not msg.startswith("add_ownership "): # add_ownership <qq_id> <plugin_name>
+        if not str(message.get("raw_message")).startswith("#ap "):
             self.logger.debug("无效的添加持有记录格式")
             return False, None
 
@@ -239,12 +238,26 @@ class GroupService:
             return False, f"用户 {user_id} 权限不足, 无法添加持有记录"
 
         try:
-            parts = msg.split(" ")
-            if len(parts) != 3:
-                return False, "参数错误，格式应为: add_ownership [QQ号] [插件名称]"
+            msg_parts = message.get("message", [])
+            if len(msg_parts) < 2:
+                return False, "消息格式错误，缺少@目标用户或商品名称"
             
-            target_qq = parts[1]
-            plugin_name = parts[2]
+            # 提取@的QQ号
+            target_qq = None
+            plugin_name = None
+            
+            for part in msg_parts:
+                if part.get("type") == "at":
+                    target_qq = part.get("data", {}).get("qq")
+                elif part.get("type") == "text":
+                    text = part.get("data", {}).get("text", "").strip()
+                    if text:
+                        plugin_name = text
+            
+            if not target_qq:
+                return False, "未找到@的目标用户"
+            if not plugin_name:
+                return False, "未指定商品名称"
             
             # 调用数据库添加持有记录
             success, msg_or_err = self.db.add_plugin_ownership(target_qq, plugin_name)
@@ -390,4 +403,3 @@ class GroupService_admin_API:
         judge,msg_or_err = await self.service.delete_commodity(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
-

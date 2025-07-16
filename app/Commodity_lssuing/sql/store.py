@@ -47,7 +47,7 @@ class Store:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             qq_id TEXT NOT NULL,         -- QQ号
             amount REAL NOT NULL,        -- 消费金额
-            purchase_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+            update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(qq_id)  -- 唯一约束改为 qq_id
         )
         """)
@@ -362,7 +362,7 @@ class Store:
                 new_amount = existing_record[1] + amount
                 cursor.execute("""
                 UPDATE purchase_records 
-                SET amount = ?, purchase_time = CURRENT_TIMESTAMP 
+                SET amount = ?, update_time = CURRENT_TIMESTAMP 
                 WHERE id = ?
                 """, (new_amount, record_id))
                 conn.commit()
@@ -393,7 +393,7 @@ class Store:
             cursor = conn.cursor()
 
             query = """
-            SELECT id, qq_id, amount, purchase_time
+            SELECT id, qq_id, amount, update_time
             FROM purchase_records
             """
             params = []
@@ -402,7 +402,7 @@ class Store:
                 query += " WHERE qq_id = ?"
                 params.append(qq_id)
 
-            query += " ORDER BY purchase_time DESC"
+            query += " ORDER BY update_time DESC"
 
             cursor.execute(query, params)
             
@@ -414,7 +414,7 @@ class Store:
                     "id": row[0],
                     "qq_id": row[1],
                     "amount": row[2],
-                    "purchase_time": row[3]
+                    "update_time": row[3]
                 })
                 
             return records, None
@@ -439,6 +439,15 @@ class Store:
             conn.execute("BEGIN TRANSACTION")
             
             try:
+                # 检查用户是否已持有该商品
+                cursor.execute("""
+                SELECT 1 FROM plugin_ownership 
+                WHERE qq_id = ? AND plugin_name = ?
+                """, (qq_id, plugin_name))
+                if cursor.fetchone():
+                    conn.commit()
+                    return False, f"用户 {qq_id} 已持有商品 {plugin_name}"
+
                 # 获取商品价格(如果amount未提供)
                 if amount is None:
                     cursor.execute("SELECT price FROM commodities WHERE name = ?", (plugin_name,))
@@ -448,12 +457,23 @@ class Store:
                         return False, f"商品 {plugin_name} 不存在"
                     amount = result[0]
 
+
                 # 添加购买记录
                 self.add_purchase_record(qq_id, amount)
-
-                conn.commit()
-                return True, f"用户 {qq_id} 商品{plugin_name}持有记录添加成功，消费金额{amount}已记录"
                 
+                # 添加商品持有记录
+                cursor.execute("""
+                INSERT INTO plugin_ownership (qq_id, plugin_name)
+                VALUES (?, ?)
+                """, (qq_id, plugin_name))
+
+                success, welfare_msg = self.auto_grant_welfare_commodities(qq_id)
+                conn.commit()
+                msg = f"用户 {qq_id} 商品{plugin_name}持有记录添加成功，消费金额{amount}已记录"
+                if welfare_msg:
+                    msg += f"\n{welfare_msg}"
+
+                return True, msg
             except Exception as e:
                 conn.rollback()
                 raise e
@@ -548,10 +568,11 @@ class Store:
             self.logger.error(f"获取商品状态失败: {e}")
             return False, f"获取商品状态失败: {e}"
 
-    def list_plugins_state(self,state:str = "TRUE") -> tuple[list, str]:
+    def list_plugins_state(self, state: str = "TRUE") -> tuple[list, str]:
         """
-        列出所有上架商品
+        列出所有上架/下架商品(包含是否为福利商品信息)
         
+        :param state: "TRUE"为上架商品，"FALSE"为下架商品
         :return: (商品列表, 错误信息)
         """
         try:
@@ -560,19 +581,26 @@ class Store:
 
             if state == "TRUE":
                 cursor.execute("""
-                SELECT plugin_name FROM plugin_status 
-                WHERE is_active = TRUE
+                SELECT ps.plugin_name, c.is_welfare 
+                FROM plugin_status ps
+                JOIN commodities c ON ps.plugin_name = c.name
+                WHERE ps.is_active = TRUE
                 """)
             elif state == "FALSE":
                 cursor.execute("""
-                SELECT plugin_name FROM plugin_status 
-                WHERE is_active = FALSE
+                SELECT ps.plugin_name, c.is_welfare 
+                FROM plugin_status ps
+                JOIN commodities c ON ps.plugin_name = c.name
+                WHERE ps.is_active = FALSE
                 """)
             else:
                 return [], "函数list_plugins_state()参数错误"
             
             results = cursor.fetchall()
-            plugins = [{"plugin_name": row[0]} for row in results]
+            plugins = [{
+                "plugin_name": row[0],
+                "is_welfare": bool(row[1])
+            } for row in results]
             return plugins, None
         except Exception as e:
             if state == "TRUE":
@@ -620,7 +648,7 @@ class Store:
             total_spent = sum(record["amount"] for record in records)
             
             # 获取最近消费时间
-            latest_purchase = max(record["purchase_time"] for record in records) if records else None
+            latest_purchase = max(record["update_time"] for record in records) if records else None
 
             return {
                 "qq_id": qq_id,
@@ -633,6 +661,77 @@ class Store:
         except Exception as e:
             self.logger.error(f"获取用户信息失败: {e}")
             return None, f"获取用户信息失败: {e}"
+
+    def auto_grant_welfare_commodities(self, qq_id: str) -> tuple[bool, str]:
+        """
+        自动发放符合条件的福利商品
+        1. 检查用户消费金额是否达到福利商品价格
+        2. 检查商品是否为上架状态
+        3. 自动发放符合条件的福利商品
+        
+        :param qq_id: 用户QQ号
+        :return: (是否成功, 错误信息)
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            # 1. 获取用户消费总额
+            cursor.execute("""
+            SELECT amount FROM purchase_records 
+            WHERE qq_id = ?
+            """, (qq_id,))
+            record = cursor.fetchone()
+            if not record:
+                return False, f"用户 {qq_id} 没有消费记录"
+            total_spent = record[0]
+            
+            # 2. 获取所有福利商品
+            cursor.execute("""
+            SELECT name, price FROM commodities
+            WHERE is_welfare = TRUE
+            """)
+            welfare_commodities = cursor.fetchall()
+            
+            granted = []
+            for commodity in welfare_commodities:
+                name, price = commodity
+                
+                # 3. 检查消费金额是否达到商品价格
+                if total_spent >= price:
+                    # 4. 检查商品是否上架
+                    cursor.execute("""
+                    SELECT is_active FROM plugin_status
+                    WHERE plugin_name = ?
+                    """, (name,))
+                    status = cursor.fetchone()
+                    if not status or not status[0]:
+                        continue  # 跳过下架商品
+                        
+                    # 5. 检查是否已持有
+                    cursor.execute("""
+                    SELECT 1 FROM plugin_ownership
+                    WHERE qq_id = ? AND plugin_name = ?
+                    """, (qq_id, name))
+                    if cursor.fetchone():
+                        continue  # 跳过已持有商品
+                        
+                    # 6. 发放福利商品
+                    cursor.execute("""
+                    INSERT INTO plugin_ownership (qq_id, plugin_name)
+                    VALUES (?, ?)
+                    """, (qq_id, name))
+                    granted.append(name)
+            
+            conn.commit()
+            
+            if granted:
+                return True, f"已自动发放福利商品: {', '.join(granted)}"
+            return True, "没有符合条件的福利商品可发放"
+            
+        except Exception as e:
+            self.logger.error(f"自动发放福利商品失败: {e}")
+            return False, f"自动发放福利商品失败: {e}"
 
     def __str__(self):
         return "商品存储数据库(包含购买记录、商品持有记录和商品状态)"

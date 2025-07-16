@@ -1,26 +1,38 @@
 {
-    "self_id": 2712065523,
+    "self_id": 3552638520,
     "user_id": 1732373074,
-    "time": 1752061183,
-    "message_id": 1167179592,
-    "message_seq": 1167179592,
-    "real_id": 1167179592,
-    "real_seq": "4449",
+    "time": 1752647268,
+    "message_id": 783585955,
+    "message_seq": 783585955,
+    "real_id": 783585955,
+    "real_seq": "5839",
     "message_type": "group",
     "sender": {
         "user_id": 1732373074,
         "nickname": "AuroBreeze",
-        "card": "额额",
+        "card": "AuroBreeze",
         "role": "owner"
     },
-    "raw_message": "开始 单词",
+    "raw_message": "#ap [CQ:at,qq=2712065523] 123",
     "font": 14,
     "sub_type": "normal",
     "message": [
         {
             "type": "text",
             "data": {
-                "text": "开始 单词"
+                "text": "#ap "
+            }
+        },
+        {
+            "type": "at",
+            "data": {
+                "qq": "2712065523"
+            }
+        },
+        {
+            "type": "text",
+            "data": {
+                "text": " 123"
             }
         }
     ],
