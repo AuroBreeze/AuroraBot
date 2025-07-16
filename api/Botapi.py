@@ -114,4 +114,35 @@ class QQAPI_list:
         await self.websocket.send(json.dumps(json_message))
         self.Logger.info(f"已发送群@消息,@{user_id},消息:{message}")
         await asyncio.sleep(1.5)
-                
+    async def send_pic_group(self, group_id: str, pic_path: str):
+        """
+        发送群聊图片
+        :param group_id: 群号
+        :param pic_path: 图片本地路径
+        """
+        import base64
+        
+        try:
+            with open(pic_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            
+            json_message = {
+                "action": "send_group_msg",
+                "params": {
+                    "group_id": str(group_id),
+                    "message": [{
+                        "type": "image",
+                        "data": {
+                            "file": f"base64://{encoded_string}",
+                            "summary": "[图片]"
+                        }
+                    }]
+                }
+            }
+            
+            await self.websocket.send(json.dumps(json_message))
+            self.Logger.info(f"已发送群图片,群号:{group_id},图片:{pic_path}")
+            await asyncio.sleep(1.5)
+        except Exception as e:
+            self.Logger.error(f"发送图片失败: {e}")
+            raise

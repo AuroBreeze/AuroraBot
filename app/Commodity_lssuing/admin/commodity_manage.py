@@ -4,6 +4,7 @@ from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 from config import env
 from ..sql.store import Store
+from ..creat_pic.main import CommodityVisualizer
 from .. import manage_cfg
 from ..sql.store import Store
 
@@ -54,20 +55,19 @@ class GroupService:
         
         try:
             part = msg.split(" ")
-            if len(part) != 6:
+            if len(part) != 5:
                 self.logger.warning("参数数量错误")
                 return False, "参数数量错误"
                 
             name = part[1]
-            chinese_name = part[2]
-            price = float(part[3])
-            notes = part[4]
-            is_welfare = False if part[5] == "0" else True
+            price = float(part[2])
+            notes = part[3]
+            is_welfare = False if part[4] == "0" else True
         except Exception as e:
             self.logger.error(f"添加商品失败, 错误信息: {e}")
         
         try:
-            judge,msg_or_err = self.db.add_commodity(name, chinese_name, price, notes, is_welfare)
+            judge,msg_or_err = self.db.add_commodity(name, price, notes, is_welfare)
             return judge,msg_or_err
         except Exception as e:
             self.logger.error(f"添加商品失败, 错误信息: {e}")
@@ -95,20 +95,18 @@ class GroupService:
 
         try:
             part = msg.split(" ")
-            if len(part) != 6:
+            if len(part) != 5:
                 self.logger.warning("参数数量错误")
                 return False, "参数数量错误"
                 
             name = part[1]
-            chinese_name = part[2]
-            price = float(part[3])
-            notes = part[4]
-            is_welfare = False if part[5] == "0" else True
+            price = float(part[2])
+            notes = part[3]
+            is_welfare = False if part[4] == "0" else True
 
             # 调用数据库更新方法
             judge, msg_or_err = self.db.update_commodity(
                 name,
-                chinese_name=chinese_name,
                 price=price,
                 notes=notes,
                 is_welfare=is_welfare
@@ -202,24 +200,19 @@ class GroupService:
             # 构建插件状态字典
             active_plugin_names = {p["plugin_name"] for p in active_plugins}
             
-            # 构建响应消息
-            max_id_length = max(len(str(c["name"])) for c in commodities) if commodities else 0
-            col_width = max(max_id_length, 8)  # 至少8个字符宽度
+            # 生成商品状态图片
+            visualizer = CommodityVisualizer()
+            fig = visualizer.generate_commodity_list([
+                {
+                    "name": c["name"],
+                    "notes": c.get("notes", "无"),
+                    "price": 0.0,  # 状态列表不需要价格
+                    "is_welfare": c.get("is_welfare", False)
+                } for c in commodities
+            ], title="商品状态列表")
             
-            response = "商品状态列表:\n"
-            separator = "-" * (col_width + 15)
-            response += separator + "\n"
-            response += f"{'商品名称':<{col_width}}上架状态  福利\n"
-            response += separator + "\n"
-            
-            for commodity in commodities:
-                status = "1" if commodity["name"] in active_plugin_names else "0"
-                welfare = "是" if commodity.get('is_welfare', False) else "否"
-                response += f"{commodity['name']:<{col_width}}   {status}      {welfare}\n"
-            
-            response += separator
-            
-            return True, response
+            pic_path = visualizer.save_figure(fig, "commodity_status")
+            return True, pic_path
         except Exception as e:
             self.logger.error(f"列出商品状态失败: {e}")
             return False, f"列出商品状态失败: {e}"
@@ -303,36 +296,18 @@ class GroupService:
                 return False, err
             
             if not user_info:
-                return True, f"用户 {target_qq} 暂无消费记录和插件持有信息"
+                return True, f"用户 {target_qq} 暂无消费记录和商品持有信息"
             
-            # 构建响应消息
-            response = f"用户 {target_qq} 信息:\n"
-            response += f"总消费金额: ¥{user_info['total_spent']:.2f}\n"
-            response += f"持有插件数: {len(user_info['plugins'])}\n"
+            # 生成用户信息图片
+            visualizer = CommodityVisualizer()
+            fig = visualizer.generate_user_info({
+                "total_spent": user_info["total_spent"],
+                "plugin_count": len(user_info["plugins"]),
+                "plugins": user_info["plugins"]
+            }, title=f"用户 {target_qq} 信息")
             
-            if user_info["latest_purchase"]:
-                response += f"最近消费时间: {user_info['latest_purchase']}\n"
-            
-            if user_info["plugins"]:
-                response += "\n插件列表:\n"
-                separator = "-" * 60
-                response += separator + "\n"
-                response += f"{'插件名称':<15} {'中文名':<15} {'价格':<8} {'福利':<5} {'备注'}\n"
-                response += separator + "\n"
-                
-                for plugin in user_info["plugins"]:
-                    welfare = "是" if plugin.get('is_welfare', False) else "否"
-                    response += (
-                        f"{plugin['name']:<15} "
-                        f"{plugin['chinese_name']:<15} "
-                        f"¥{plugin['price']:<7.2f} "
-                        f"{welfare:<5} "
-                        f"{plugin['notes'] or '无'}\n"
-                    )
-                
-                response += separator
-            
-            return True, response
+            pic_path = visualizer.save_figure(fig, "user_info")
+            return True, pic_path
         except Exception as e:
             self.logger.error(f"获取用户信息失败: {e}")
             return False, f"获取用户信息失败: {e}"
@@ -369,6 +344,85 @@ class GroupService:
             self.logger.error(f"删除商品失败: {e}")
             return False, f"删除商品失败: {e}"
 
+    async def clean_old_pictures(self, message: dict) -> tuple[bool, str]:
+        """
+        清理超过12小时的图片文件
+        
+        :param message: 消息字典
+        :return: 成功与否，错误信息
+        """
+        msg = str(message.get("raw_message"))
+        if msg != "#clean_pics" and msg != "#cp":
+            return False, None
+
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        if self.auth.check_user_permission(user_id) is False:
+            return False, "权限不足，只有管理员可以清理图片"
+
+        try:
+            import os
+            import time
+            from datetime import datetime, timedelta
+            
+            # 使用与CommodityVisualizer相同的图片保存路径
+            pic_dir = "pic/"
+            if not os.path.exists(pic_dir):
+                return True, "图片目录不存在，无需清理"
+            cutoff = datetime.now() - timedelta(hours=12)
+            deleted = 0
+            
+            for filename in os.listdir(pic_dir):
+                if filename.endswith('.png'):
+                    try:
+                        # 从文件名解析时间戳 (格式: base_YYYYMMDD_HHMMSS.png)
+                        timestamp_str = filename.split('_')[-1].split('.')[0]
+                        file_time = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
+                        if file_time < cutoff:
+                            filepath = os.path.join(pic_dir, filename)
+                            os.remove(filepath)
+                            deleted += 1
+                    except Exception as e:
+                        continue  # 跳过格式不匹配的文件
+            
+            return True, f"已清理{deleted}个过期图片文件"
+        except Exception as e:
+            return False, f"清理图片失败: {e}"
+
+    async def set_wiki_url(self, message: dict) -> tuple[bool, str]:
+        """
+        设置WIKI URL
+        
+        :param message: 消息字典
+        :return: 成功与否，错误信息
+        """
+        msg = str(message.get("raw_message"))
+        if not msg.startswith("#wiki "):  #wikI <url>
+                self.logger.debug("无效的WIKI URL设置格式")
+                return False, None
+
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        if self.auth.check_user_permission(user_id) is False:
+            self.logger.warning(f"用户 {user_id} 权限不足, 无法设置WIKI URL")
+            return False, f"用户 {user_id} 权限不足, 无法设置WIKI URL"
+
+        try:
+            parts = msg.split(" ")
+            if len(parts) != 2:
+                return False, "参数错误，格式应为: wikI <URL>"
+            
+            url = parts[1]
+            from .. import manage_cfg
+            manage_cfg.WIKI_URL = url
+            return True, f"WIKI URL已设置为: {url}"
+            
+        except Exception as e:
+            self.logger.error(f"设置WIKI URL失败: {e}")
+            return False, f"设置WIKI URL失败: {e}"
+
 class GroupService_admin_API:
     """群组服务层，封装所有admin权限群组相关业务逻辑"""
     def __init__(self,websocket, message):
@@ -395,7 +449,10 @@ class GroupService_admin_API:
 
         judge,msg_or_err = await self.service.list_commodities_with_status(self.message)
         if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+            if isinstance(msg_or_err, str) and msg_or_err.endswith('.png'):
+                await QQAPI_list(self.websocket).send_pic_group(self.message.get("group_id"), msg_or_err)
+            else:
+                await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
 
         judge,msg_or_err = await self.service.update_plugin_status(self.message)
         if msg_or_err is not None:
@@ -407,8 +464,19 @@ class GroupService_admin_API:
         
         judge,msg_or_err = await self.service.get_user_info(self.message)
         if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+            if isinstance(msg_or_err, str) and msg_or_err.endswith('.png'):
+                await QQAPI_list(self.websocket).send_pic_group(self.message.get("group_id"), msg_or_err)
+            else:
+                await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
 
         judge,msg_or_err = await self.service.delete_commodity(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
+        judge,msg_or_err = await self.service.clean_old_pictures(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
+        judge,msg_or_err = await self.service.set_wiki_url(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)

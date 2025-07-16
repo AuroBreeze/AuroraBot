@@ -31,7 +31,6 @@ class Store:
         CREATE TABLE IF NOT EXISTS commodities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,          -- 商品名称
-            chinese_name TEXT NOT NULL,  -- 中文名称
             price REAL NOT NULL,         -- 售价
             notes TEXT,                 -- 备注
             is_welfare BOOLEAN DEFAULT FALSE,  -- 是否为福利商品
@@ -72,8 +71,6 @@ class Store:
         """)
         
         cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_commodity_chinese_name 
-        ON commodities(chinese_name)
         """)
 
         cursor.execute("""
@@ -105,12 +102,11 @@ class Store:
         """)
         
         self.conn.commit()
-    def add_commodity(self, name: str, chinese_name: str, price: float, notes: str = None, is_welfare: bool = False) -> tuple[bool, str]:
+    def add_commodity(self, name: str, price: float, notes: str = None, is_welfare: bool = False) -> tuple[bool, str]:
         """
         添加商品
     
         :param name: 商品名称
-        :param chinese_name: 中文名称
         :param price: 售价
         :param notes: 备注(可选)
         :param is_welfare: 是否为福利商品(默认False)
@@ -131,9 +127,9 @@ class Store:
             try:
                 # 添加新商品
                 cursor.execute("""
-                INSERT INTO commodities (name, chinese_name, price, notes, is_welfare)
-                VALUES (?, ?, ?, ?, ?)
-                """, (name, chinese_name, price, notes, is_welfare))
+                INSERT INTO commodities (name, price, notes, is_welfare)
+                VALUES (?, ?, ?, ?)
+                """, (name, price, notes, is_welfare))
                 
                 # 默认设置为上架状态
                 cursor.execute("""
@@ -142,7 +138,7 @@ class Store:
                 """, (name,))
                 
                 conn.commit()
-                return True, f"商品 {name}({chinese_name}) 添加成功并已上架"
+                return True, f"商品 {name} 添加成功并已上架"
                 
             except Exception as e:
                 conn.rollback()
@@ -151,12 +147,11 @@ class Store:
             self.logger.error(f"添加商品失败: {e}")
             return False, f"添加商品失败: {e}"
 
-    def update_commodity(self, name: str, chinese_name: str = None, price: float = None, notes: str = None, is_welfare: bool = None) -> tuple[bool, str]:
+    def update_commodity(self, name: str, price: float = None, notes: str = None, is_welfare: bool = None) -> tuple[bool, str]:
         """
         更新商品信息
     
         :param name: 商品名称(用于查找)
-        :param chinese_name: 新中文名称(可选)
         :param price: 新售价(可选)
         :param notes: 新备注(可选)
         :param is_welfare: 是否为福利商品(可选)
@@ -175,10 +170,6 @@ class Store:
             updates = []
             params = []
         
-            if chinese_name is not None:
-                updates.append("chinese_name = ?")
-                params.append(chinese_name)
-            
             if price is not None:
                 updates.append("price = ?")
                 params.append(price)
@@ -224,7 +215,7 @@ class Store:
             cursor = conn.cursor()
             
             cursor.execute("""
-            SELECT name, chinese_name, price, notes, is_welfare 
+            SELECT name, price, notes, is_welfare 
             FROM commodities 
             WHERE name = ?
             """, (name,))
@@ -235,10 +226,9 @@ class Store:
                 
             return {
                 "name": result[0],
-                "chinese_name": result[1],
-                "price": result[2],
-                "notes": result[3],
-                "is_welfare": bool(result[4])
+                "price": result[1],
+                "notes": result[2],
+                "is_welfare": bool(result[3])
             }, None
         except Exception as e:
             self.logger.error(f"获取商品信息失败: {e}")
@@ -280,7 +270,7 @@ class Store:
             cursor = conn.cursor()
             
             cursor.execute("""
-            SELECT name, chinese_name, price, notes, is_welfare 
+            SELECT name, price, notes, is_welfare 
             FROM commodities 
             ORDER BY name
             """)
@@ -291,10 +281,9 @@ class Store:
             for row in results:
                 commodities.append({
                     "name": row[0],
-                    "chinese_name": row[1],
-                    "price": row[2],
-                    "notes": row[3],
-                    "is_welfare": bool(row[4])
+                    "price": row[1],
+                    "notes": row[2],
+                    "is_welfare": bool(row[3])
                 })
                 
             return commodities, None
@@ -304,7 +293,7 @@ class Store:
 
     def search_commodities(self, keyword: str) -> tuple[list, str]:
         """
-        搜索商品(按名称或中文名称)
+        搜索商品(按名称)
         
         :param keyword: 搜索关键词
         :return: (商品列表, 错误信息)
@@ -314,11 +303,11 @@ class Store:
             cursor = conn.cursor()
             
             cursor.execute("""
-            SELECT name, chinese_name, price, notes, is_welfare 
+            SELECT name, price, notes, is_welfare 
             FROM commodities 
-            WHERE name LIKE ? OR chinese_name LIKE ?
+            WHERE name LIKE ?
             ORDER BY name
-            """, (f"%{keyword}%", f"%{keyword}%"))
+            """, (f"%{keyword}%",))
             
             results = cursor.fetchall()
             commodities = []
@@ -326,10 +315,9 @@ class Store:
             for row in results:
                 commodities.append({
                     "name": row[0],
-                    "chinese_name": row[1],
-                    "price": row[2],
-                    "notes": row[3],
-                    "is_welfare": bool(row[4])
+                    "price": row[1],
+                    "notes": row[2],
+                    "is_welfare": bool(row[3])
                 })
                 
             return commodities, None
@@ -634,7 +622,6 @@ class Store:
                     continue  # 跳过无效商品
                 plugin_details.append({
                     "name": commodity["name"],
-                    "chinese_name": commodity["chinese_name"],
                     "price": commodity["price"],
                     "notes": commodity["notes"]
                 })

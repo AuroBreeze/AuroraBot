@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from time import sleep
 import pytz
 from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
@@ -6,6 +7,7 @@ from config import env
 from ..sql.store import Store
 from .. import manage_cfg
 from ..sql.store import Store
+from ..creat_pic.main import CommodityVisualizer
 
 class UserService_user_API:
     """群组服务层，封装所有user权限群组相关业务逻辑"""
@@ -24,13 +26,21 @@ class UserService_user_API:
         
         judge,msg_or_err = await self.service.list_available_commodities(self.message)
         if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+            #await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+            await QQAPI_list(self.websocket).send_pic_group(self.message.get("group_id"), msg_or_err)
 
         judge,msg_or_err = await self.service.get_user_info(self.message)
         if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+            if isinstance(msg_or_err, str) and msg_or_err.endswith('.png'):
+                await QQAPI_list(self.websocket).send_pic_group(self.message.get("group_id"), msg_or_err)
+            else:
+                await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
 
         judge,msg_or_err = await self.service.show_help(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
+        judge,msg_or_err = await self.service.show_wiki_url(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
 
@@ -79,15 +89,18 @@ class UserService:
             
             # 构建表格响应
             table_config = [
-                {"header": "商品名称", "field": "name", "min_width": 8, "align": "<"},
-                {"header": "中文名称", "field": "chinese_name", "min_width": 10, "align": "<"},
+                {"header": "名称", "field": "name", "min_width": 15, "align": "<"},
+                {"header": "备注", "field": "notes", "min_width": 20, "align": "<", "default": "无"},
                 {"header": "价格", "field": "price", "min_width": 8, "align": "<", "format": "{:<8.2f}"},
-                {"header": "福利", "field": "is_welfare", "min_width": 4, "align": "<", "format": lambda x: "是" if x else "否"},
-                {"header": "备注", "field": "notes", "min_width": 4, "align": "<", "default": "无"}
+                {"header": "福利", "field": "is_welfare", "min_width": 6, "align": "<", "format": lambda x: "是" if x else "否"}
             ]
             
-            response = self._build_commodity_table(available_commodities, table_config)
-            return True, response
+            # 生成商品列表图片
+            visualizer = CommodityVisualizer()
+            fig = visualizer.generate_commodity_list(available_commodities)
+            pic_path = "pic/commodity_list.png"
+            visualizer.save_figure(fig, "commodity_list.png")
+            return True, pic_path
         except Exception as e:
             self.logger.error(f"列出上架商品失败: {e}")
             return False, f"列出上架商品失败: {e}"
@@ -112,8 +125,11 @@ class UserService:
             header_parts.append(f"{col['header']:{col['align']}{col_widths[i]}}")
         header = "  ".join(header_parts)
         
-        # 构建分隔线
-        separator = "-" * (sum(col_widths) + (len(columns) - 1) * 2)
+        # 构建分隔线 - 修改为按列宽动态构建
+        separator_parts = []
+        for i, width in enumerate(col_widths):
+            separator_parts.append("-" * width)
+        separator = "  ".join(separator_parts)
         
         # 构建数据行
         rows = []
@@ -160,23 +176,25 @@ class UserService:
         help_text = """可用命令:
         
 管理员命令(命令简写):
-- #add_commodity(#ac) <名称> <中文名> <价格> <备注> <是否福利(0/1)> - 添加商品
-- #update_commodity(#uc) <名称> <中文名> <价格> <备注> <是否福利(0/1)> - 更新商品
+- #add_commodity(#ac) <名称> <价格> <备注> <是否福利(0/1)> - 添加商品
+- #update_commodity(#uc) <名称> <价格> <备注> <是否福利(0/1)> - 更新商品
 - #list_commodities_status(#lcs) - 列出商品状态(含福利信息)
 - #update_status(#us) <插件ID> <1/0> - 更新插件状态
 - #user_info(#ui) <QQ号> - 查看用户信息(含福利信息)
 - #delete_commodity(#dc) <名称> - 删除商品
 - #ap @群友 <插件名称>
+- #wiki <URL> - 设置商品WIKI链接
 
 用户命令:
-- #list - 列出上架商品(含福利信息)
-- #my_info - 查看我的信息(含福利信息)
+- #list - 列出上架商品(名称、价格和备注)
+- #my_info - 查看我的信息(含插件列表)
+- #wiki(#wk) - 查看WIKI链接
 - #help - 显示本帮助
 
 示例：
-#ac 苹果 苹果 1.0 无 0
+#ac 苹果 1.0 无 0
 或者 
-#add_commodity 苹果 苹果 1.0 无 0
+#add_commodity 苹果 1.0 无 0
 """
         return True, help_text
 
@@ -202,30 +220,38 @@ class UserService:
             if not user_info:
                 return True, "暂无消费记录和插件持有信息"
             
-            # 构建响应消息
-            response = f"用户 {qq_id} 信息:\n"
-            response += f"总消费金额: ¥{user_info['total_spent']:.2f}\n"
-            response += f"持有插件数: {len(user_info['plugins'])}\n"
+            # 生成用户信息图片
+            visualizer = CommodityVisualizer()
+            fig = visualizer.generate_user_info({
+                "total_spent": user_info["total_spent"],
+                "plugin_count": len(user_info["plugins"]),
+                "plugins": user_info["plugins"]
+            }, title=f"用户 {qq_id} 信息")
             
-            if user_info["plugins"]:
-                response += "\n插件列表:\n"
-                separator = "-" * 60
-                response += separator + "\n"
-                response += f"{'插件名称':<15} {'中文名':<15} {'价格':<8} {'福利':<5} {'备注'}\n"
-                response += separator + "\n"
-                
-                for plugin in user_info["plugins"]:
-                    welfare = "是" if plugin.get('is_welfare', False) else "否"
-                    response += (
-                        f"{plugin['name']:<15} "
-                        f"{plugin['chinese_name']:<15} "
-                        f"¥{plugin['price']:<7.2f} "
-                        f"{welfare:<5} "
-                        f"{plugin['notes'] or '无'}\n"
-                    )
-                response += separator
-            
-            return True, response
+            pic_path = visualizer.save_figure(fig, "user_info")
+            return True, pic_path
         except Exception as e:
             self.logger.error(f"获取用户信息失败: {e}")
             return False, f"获取用户信息失败: {e}"
+
+    async def show_wiki_url(self, message: dict) -> tuple[bool, str]:
+        """
+        显示WIKI链接
+        
+        :param message: 消息字典
+        :return: 成功与否，错误信息
+        """
+        msg = str(message.get("raw_message"))
+        if msg != "#wiki" and msg != "#wk":
+            self.logger.debug("无效的WIKI链接查询格式")
+            return False, None
+
+        try:
+            from .. import manage_cfg
+            if not manage_cfg.WIKI_URL:
+                return True, "WIKI链接尚未设置"
+            
+            return True, f"WIKI链接: {manage_cfg.WIKI_URL}"
+        except Exception as e:
+            self.logger.error(f"获取WIKI链接失败: {e}")
+            return False, f"获取WIKI链接失败: {e}"
