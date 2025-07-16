@@ -78,7 +78,7 @@ class TableImageGenerator:
             loc='top',
             colColours=['#444444']*len(stats_df.columns),
             cellColours=[[self.cmap(0.3)]*len(stats_df.columns)]*len(stats_df),
-            bbox=[0.1, 0.85, 0.8, 0.1]
+            bbox=[0.1, 0.8, 0.8, 0.15]  # 增加高度并调整垂直位置
         )
         
         self._style_table(stats_table)
@@ -91,10 +91,10 @@ class TableImageGenerator:
             loc='center',
             colColours=['#444444']*len(df.columns),
             cellColours=[[self.cmap(0.3)]*len(df.columns)]*len(df),
-            bbox=[0, 0.05, 1, 0.75]
+            bbox=[0.1, 0.15, 0.8, 0.65]  # 增加底部留白并调整高度
         )
         
-        self._style_table(stats_table)
+        self._style_table(table)
         
         # 添加标题到最上方
         plt.title(title, 
@@ -103,8 +103,8 @@ class TableImageGenerator:
                  pad=20,
                  fontweight='bold')
         
-        # 调整表格占满整个图片
-        plt.subplots_adjust(left=0, right=1, top=0.95, bottom=0.02)
+        # 调整整体边距参数
+        plt.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.1)
         return fig
     
     def _style_table(self, table):
