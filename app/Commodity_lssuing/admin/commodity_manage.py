@@ -363,30 +363,15 @@ class GroupService:
 
         try:
             import os
-            import time
-            from datetime import datetime, timedelta
+            import shutil
             
             # 使用与CommodityVisualizer相同的图片保存路径
             pic_dir = "pic/"
             if not os.path.exists(pic_dir):
                 return True, "图片目录不存在，无需清理"
-            cutoff = datetime.now() - timedelta(hours=12)
-            deleted = 0
-            
-            for filename in os.listdir(pic_dir):
-                if filename.endswith('.png'):
-                    try:
-                        # 从文件名解析时间戳 (格式: base_YYYYMMDD_HHMMSS.png)
-                        timestamp_str = filename.split('_')[-1].split('.')[0]
-                        file_time = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
-                        if file_time < cutoff:
-                            filepath = os.path.join(pic_dir, filename)
-                            os.remove(filepath)
-                            deleted += 1
-                    except Exception as e:
-                        continue  # 跳过格式不匹配的文件
-            
-            return True, f"已清理{deleted}个过期图片文件"
+                
+            shutil.rmtree(pic_dir)
+            return True, "已删除图片目录及其所有内容"
         except Exception as e:
             return False, f"清理图片失败: {e}"
 

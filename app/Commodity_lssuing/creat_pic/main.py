@@ -128,9 +128,6 @@ class CommodityVisualizer:
             if key[0] == 0:
                 cell.set_text_props(weight='bold', color='#FFEE88')
                 cell.set_facecolor('#333333')
-            elif key[0] == 1:
-                cell.set_facecolor(self.cmap(0.3))
-                cell.set_text_props(weight='bold', color='#FF9900', fontsize=13)
             else:
                 if key[0] % 2 == 0:
                     cell.set_facecolor(self.cmap(0.25))

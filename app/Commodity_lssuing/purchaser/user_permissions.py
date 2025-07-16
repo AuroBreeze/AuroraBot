@@ -183,6 +183,7 @@ class UserService:
 - #delete_commodity(#dc) <名称> - 删除商品
 - #ap @群友 <插件名称>
 - #wiki <URL> - 设置商品WIKI链接
+- ##clean_pics(#cp) - 清理图片缓存
 
 用户命令:
 - #list - 列出上架商品(名称、价格和备注)
