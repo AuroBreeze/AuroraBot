@@ -436,6 +436,18 @@ class Store:
                     conn.commit()
                     return False, f"用户 {qq_id} 已持有商品 {plugin_name}"
 
+                # 检查商品是否为福利商品
+                cursor.execute("""
+                SELECT is_welfare FROM commodities 
+                WHERE name = ?
+                """, (plugin_name,))
+                result = cursor.fetchone()
+                if not result:
+                    conn.commit()
+                    return False, f"商品 {plugin_name} 不存在"
+                
+                is_welfare = bool(result[0])
+
                 # 获取商品价格(如果amount未提供)
                 if amount is None:
                     cursor.execute("SELECT price FROM commodities WHERE name = ?", (plugin_name,))
@@ -443,8 +455,7 @@ class Store:
                     if not result:
                         conn.commit()
                         return False, f"商品 {plugin_name} 不存在"
-                    amount = result[0]
-
+                    amount = 0 if is_welfare else result[0]  # 福利商品amount设为0
 
                 # 添加购买记录
                 self.add_purchase_record(qq_id, amount)
