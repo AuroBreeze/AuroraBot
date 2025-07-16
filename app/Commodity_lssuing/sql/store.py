@@ -480,6 +480,39 @@ class Store:
             self.logger.error(f"添加商品持有记录失败: {e}")
             return False, f"添加商品持有记录失败: {e}"
 
+    def remove_plugin_ownership(self, qq_id: str, plugin_name: str) -> tuple[bool, str]:
+        """
+        删除用户商品持有记录
+        
+        :param qq_id: 用户QQ号
+        :param plugin_name: 商品名称
+        :return: (是否成功, 错误信息)
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # 检查记录是否存在
+            cursor.execute("""
+            SELECT 1 FROM plugin_ownership 
+            WHERE qq_id = ? AND plugin_name = ?
+            """, (qq_id, plugin_name))
+            
+            if not cursor.fetchone():
+                return False, f"用户 {qq_id} 未持有商品 {plugin_name}"
+            
+            # 删除记录
+            cursor.execute("""
+            DELETE FROM plugin_ownership 
+            WHERE qq_id = ? AND plugin_name = ?
+            """, (qq_id, plugin_name))
+            
+            conn.commit()
+            return True, f"已删除用户 {qq_id} 的商品 {plugin_name}"
+        except Exception as e:
+            self.logger.error(f"删除用户商品持有记录失败: {e}")
+            return False, f"删除用户商品持有记录失败: {e}"
+
     def get_user_plugins(self, qq_id: str) -> tuple[list, str]:
         """
         获取用户持有的商品

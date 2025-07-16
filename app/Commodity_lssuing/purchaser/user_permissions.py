@@ -181,9 +181,10 @@ class UserService:
 - #update_status(#us) <插件ID> <1/0> - 更新插件状态
 - #user_info(#ui) <QQ号> - 查看用户信息(含福利信息)
 - #delete_commodity(#dc) <名称> - 删除商品
-- #ap @群友 <插件名称>
+- #ap @群友 <插件名称> - 授权商品
+- #rp @群友 <插件名称> - 移除授权商品
 - #wiki <URL> - 设置商品WIKI链接
-- ##clean_pics(#cp) - 清理图片缓存
+- #clean_pics(#cp) - 清理图片缓存
 
 用户命令:
 - #list - 列出上架商品(名称、价格和备注)

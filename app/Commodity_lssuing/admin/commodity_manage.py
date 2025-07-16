@@ -344,6 +344,54 @@ class GroupService:
             self.logger.error(f"删除商品失败: {e}")
             return False, f"删除商品失败: {e}"
 
+    async def remove_plugin_ownership(self, message: dict) -> tuple[bool, str]:
+        """
+        删除用户商品持有记录
+        
+        :param message: 消息字典
+        :return: 成功与否，错误信息
+        """
+        if not str(message.get("raw_message")).startswith("#rp "): #rp <@ target_qq> <plugin_name>
+            self.logger.debug("无效的删除持有记录格式")
+            return False, None
+
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        if self.auth.check_user_permission(user_id) is False:
+            self.logger.warning(f"用户 {user_id} 权限不足, 无法删除持有记录")
+            return False, f"用户 {user_id} 权限不足, 无法删除持有记录"
+
+        try:
+            msg_parts = message.get("message", [])
+            if len(msg_parts) < 2:
+                return False, "消息格式错误，缺少@目标用户或商品名称"
+            
+            # 提取@的QQ号
+            target_qq = None
+            plugin_name = None
+            
+            for part in msg_parts:
+                if part.get("type") == "at":
+                    target_qq = part.get("data", {}).get("qq")
+                elif part.get("type") == "text":
+                    text = part.get("data", {}).get("text", "").strip()
+                    if text:
+                        plugin_name = text
+            
+            if not target_qq:
+                return False, "未找到@的目标用户"
+            if not plugin_name:
+                return False, "未指定商品名称"
+            
+            # 调用数据库删除持有记录
+            success, msg_or_err = self.db.remove_plugin_ownership(target_qq, plugin_name)
+            return success, msg_or_err
+            
+        except Exception as e:
+            self.logger.error(f"删除持有记录失败: {e}")
+            return False, f"删除持有记录失败: {e}"
+
     async def clean_old_pictures(self, message: dict) -> tuple[bool, str]:
         """
         清理超过12小时的图片文件
@@ -463,5 +511,9 @@ class GroupService_admin_API:
             await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
 
         judge,msg_or_err = await self.service.set_wiki_url(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
+        judge,msg_or_err = await self.service.remove_plugin_ownership(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
