@@ -40,9 +40,10 @@ class GroupService:
         :return: 成功与否，错误信息
         """
         msg = str(message.get("raw_message"))
-        if not msg.startswith("add_commodity "): # add_commodity <name> <chinese_name> <price> <notes> <is_welfare>
-            self.logger.debug("无效的群组授权格式")
-            return False, None
+        if not msg.startswith("#add_commodity "): # add_commodity <name> <chinese_name> <price> <notes> <is_welfare>
+            if not msg.startswith("#ac "):
+                self.logger.debug("无效的群组授权格式")
+                return False, None
 
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
@@ -80,9 +81,10 @@ class GroupService:
         :return: 成功与否，错误信息
         """
         msg = str(message.get("raw_message"))
-        if not msg.startswith("update_commodity "): # update_commodity <name> <chinese_name> <price> <notes> <is_welfare>
-            self.logger.debug("无效的更新商品格式")
-            return False, None
+        if not msg.startswith("#update_commodity "): # update_commodity <name> <chinese_name> <price> <notes> <is_welfare>
+            if not msg.startswith("#uc "):
+                self.logger.debug("无效的更新商品格式")
+                return False, None
 
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
@@ -128,9 +130,10 @@ class GroupService:
         :return: 成功与否，错误信息
         """
         msg = str(message.get("raw_message"))
-        if not msg.startswith("update_status "): # update_status <plugin_id> <status>
-            self.logger.debug("无效的更新状态格式")
-            return False, None
+        if not msg.startswith("#update_status "): # update_status <plugin_id> <status>
+            if not msg.startswith("#us "):
+                self.logger.debug("无效的更新状态格式")
+                return False, None
 
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
@@ -168,9 +171,10 @@ class GroupService:
         :return: 成功与否，错误信息
         """
         msg = str(message.get("raw_message"))
-        if msg != "list_commodities_status":
-            self.logger.debug("无效的列出商品格式")
-            return False, None
+        if msg != "#list_commodities_status":
+            if msg != "#lcs":
+                self.logger.debug("无效的列出商品格式")
+                return False, None
 
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
@@ -203,14 +207,15 @@ class GroupService:
             col_width = max(max_id_length, 8)  # 至少8个字符宽度
             
             response = "商品状态列表:\n"
-            separator = "-" * (col_width + 10)
+            separator = "-" * (col_width + 15)
             response += separator + "\n"
-            response += f"{'商品名称':<{col_width}}上架状态\n"
+            response += f"{'商品名称':<{col_width}}上架状态  福利\n"
             response += separator + "\n"
             
             for commodity in commodities:
                 status = "1" if commodity["name"] in active_plugin_names else "0"
-                response += f"{commodity['name']:<{col_width}}   {status}\n"
+                welfare = "是" if commodity.get('is_welfare', False) else "否"
+                response += f"{commodity['name']:<{col_width}}   {status}      {welfare}\n"
             
             response += separator
             
@@ -275,9 +280,10 @@ class GroupService:
         :return: 成功与否，错误信息
         """
         msg = str(message.get("raw_message"))
-        if not msg.startswith("user_info "):
-            self.logger.debug("无效的用户信息查询格式")
-            return False, None
+        if not msg.startswith("#user_info "):
+            if not msg.startswith("#ui "):
+                self.logger.debug("无效的用户信息查询格式")
+                return False, None
 
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
@@ -309,16 +315,18 @@ class GroupService:
             
             if user_info["plugins"]:
                 response += "\n插件列表:\n"
-                separator = "-" * 50
+                separator = "-" * 60
                 response += separator + "\n"
-                response += f"{'插件名称':<15} {'中文名':<15} {'价格':<8} {'备注'}\n"
+                response += f"{'插件名称':<15} {'中文名':<15} {'价格':<8} {'福利':<5} {'备注'}\n"
                 response += separator + "\n"
                 
                 for plugin in user_info["plugins"]:
+                    welfare = "是" if plugin.get('is_welfare', False) else "否"
                     response += (
                         f"{plugin['name']:<15} "
                         f"{plugin['chinese_name']:<15} "
                         f"¥{plugin['price']:<7.2f} "
+                        f"{welfare:<5} "
                         f"{plugin['notes'] or '无'}\n"
                     )
                 
@@ -336,9 +344,10 @@ class GroupService:
         :return: 成功与否，错误信息
         """
         msg = str(message.get("raw_message"))
-        if not msg.startswith("delete_commodity "):  # delete_commodity <name>
-            self.logger.debug("无效的删除商品格式")
-            return False, None
+        if not msg.startswith("#delete_commodity "):  # delete_commodity <name>
+            if not msg.startswith("#dc "):
+                self.logger.debug("无效的删除商品格式")
+                return False, None
 
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))

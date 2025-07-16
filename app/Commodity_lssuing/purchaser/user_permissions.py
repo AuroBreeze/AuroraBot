@@ -30,6 +30,10 @@ class UserService_user_API:
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
 
+        judge,msg_or_err = await self.service.show_help(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
+
 class UserService:
     """群组服务层，封装所有群组相关业务逻辑"""
     def __init__(self, db: Store):
@@ -45,7 +49,7 @@ class UserService:
         :return: 成功与否，错误信息
         """
         msg = str(message.get("raw_message"))
-        if msg != "list_commodities":
+        if msg != "#list":
             self.logger.debug("无效的列出商品格式")
             return False, None
 
@@ -78,6 +82,7 @@ class UserService:
                 {"header": "商品名称", "field": "name", "min_width": 8, "align": "<"},
                 {"header": "中文名称", "field": "chinese_name", "min_width": 10, "align": "<"},
                 {"header": "价格", "field": "price", "min_width": 8, "align": "<", "format": "{:<8.2f}"},
+                {"header": "福利", "field": "is_welfare", "min_width": 4, "align": "<", "format": lambda x: "是" if x else "否"},
                 {"header": "备注", "field": "notes", "min_width": 4, "align": "<", "default": "无"}
             ]
             
@@ -123,7 +128,10 @@ class UserService:
                 
                 # 应用格式化
                 if "format" in col:
-                    value = col["format"].format(value)
+                    if callable(col["format"]):
+                        value = col["format"](value)
+                    else:
+                        value = col["format"].format(value)
                 
                 row_parts.append(f"{value:{col['align']}{col_widths[i]}}")
             rows.append("  ".join(row_parts))
@@ -138,6 +146,40 @@ class UserService:
             separator
         )
     
+    async def show_help(self, message: dict) -> tuple[bool, str]:
+        """
+        显示帮助信息
+        
+        :param message: 消息字典
+        :return: 成功与否，错误信息
+        """
+        msg = str(message.get("raw_message"))
+        if msg != "#help":
+            return False, None
+
+        help_text = """可用命令:
+        
+管理员命令(命令简写):
+- #add_commodity(#ac) <名称> <中文名> <价格> <备注> <是否福利(0/1)> - 添加商品
+- #update_commodity(#uc) <名称> <中文名> <价格> <备注> <是否福利(0/1)> - 更新商品
+- #list_commodities_status(#lcs) - 列出商品状态(含福利信息)
+- #update_status(#us) <插件ID> <1/0> - 更新插件状态
+- #user_info(#ui) <QQ号> - 查看用户信息(含福利信息)
+- #delete_commodity(#dc) <名称> - 删除商品
+- #ap @群友 <插件名称>
+
+用户命令:
+- #list - 列出上架商品(含福利信息)
+- #my_info - 查看我的信息(含福利信息)
+- #help - 显示本帮助
+
+示例：
+#ac 苹果 苹果 1.0 无 0
+或者 
+#add_commodity 苹果 苹果 1.0 无 0
+"""
+        return True, help_text
+
     async def get_user_info(self, message: dict) -> tuple[bool, str]:
         """
         获取用户信息(消费金额和拥有的插件)
@@ -146,7 +188,7 @@ class UserService:
         :return: 成功与否，错误信息
         """
         msg = str(message.get("raw_message"))
-        if msg != "my_info":
+        if msg != "#my_info":
             self.logger.debug("无效的用户信息查询格式")
             return False, None
 
@@ -167,16 +209,18 @@ class UserService:
             
             if user_info["plugins"]:
                 response += "\n插件列表:\n"
-                separator = "-" * 50
+                separator = "-" * 60
                 response += separator + "\n"
-                response += f"{'插件名称':<15} {'中文名':<15} {'价格':<8} {'备注'}\n"
+                response += f"{'插件名称':<15} {'中文名':<15} {'价格':<8} {'福利':<5} {'备注'}\n"
                 response += separator + "\n"
                 
                 for plugin in user_info["plugins"]:
+                    welfare = "是" if plugin.get('is_welfare', False) else "否"
                     response += (
                         f"{plugin['name']:<15} "
                         f"{plugin['chinese_name']:<15} "
                         f"¥{plugin['price']:<7.2f} "
+                        f"{welfare:<5} "
                         f"{plugin['notes'] or '无'}\n"
                     )
                 response += separator
