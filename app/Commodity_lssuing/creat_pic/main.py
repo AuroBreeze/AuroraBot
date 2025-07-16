@@ -55,69 +55,68 @@ class CommodityVisualizer:
         )
         self._style_table(table)
         return fig
-
     def generate_user_info(self, user_data, title="用户信息"):
-        # 用户信息表格数据
+    # 用户信息表格数据
         stats = {
-            "名称": ["总消费金额", "持有商品数"],
-            "价格": [f"{user_data['total_spent']:.2f}", str(user_data['plugin_count'])],
-        }
+        "名称": ["总消费金额", "持有商品数"],
+        "价格": [f"{user_data['total_spent']:.2f}", str(user_data['plugin_count'])],
+    }
         stats_df = pd.DataFrame(stats)
 
-        # 商品信息表格数据
+    # 商品信息表格数据
         plugins = user_data["plugins"]
         plugin_data = {
-            "名称": [p["name"] for p in plugins],
-            "备注": [p.get("notes", "无") for p in plugins],
-            "价格": [f"{p['price']:.2f}" for p in plugins],
-            "福利": ["是" if p.get("is_welfare", False) else "否" for p in plugins]
-        }
+        "名称": [p["name"] for p in plugins],
+        "备注": [p.get("notes", "无") for p in plugins],
+        "价格": [f"{p['price']:.2f}" for p in plugins],
+        "福利": ["是" if p.get("is_welfare", False) else "否" for p in plugins]
+    }
         plugin_df = pd.DataFrame(plugin_data)
 
-        # 计算总行数和高度
-        total_rows = max(len(stats_df), len(plugin_df))
+    # 计算总行数和高度
+        total_rows = len(plugin_df)
         fig_height = max(6, total_rows * 0.6 + 1.5)
-        
+    
         fig = plt.figure(figsize=(12, fig_height), facecolor='#0C0C0C')
         ax = fig.add_axes([0, 0, 1, 1])
         ax.set_facecolor('#0C0C0C')
         ax.axis('off')
 
-        # 标题
+    # 标题
         title_table = plt.table(
-            cellText=[[title]],
-            colWidths=[1.0],
-            loc='upper center',
-            cellLoc='center',
-            bbox=[0, 0.92, 1, 0.08]
-        )
+        cellText=[[title]],
+        colWidths=[1.0],
+        loc='upper center',
+        cellLoc='center',
+        bbox=[0, 0.92, 1, 0.08]
+    )
         title_cell = title_table[0, 0]
         title_cell.set_text_props(color='#FFCC00', weight='bold', fontsize=18)
         title_cell.set_facecolor('#222222')
         title_cell.set_edgecolor('#444444')
 
-        # 用户信息表格 (上半部分)
+    # 用户信息表格 (上半部分)
         user_table = plt.table(
-            cellText=stats_df.values,
-            colLabels=stats_df.columns,
-            cellLoc='center',
-            loc='center',
-            colColours=['#444444'] * len(stats_df.columns),
-            cellColours=[[self.cmap(0.3)] * len(stats_df.columns)] + [[self.cmap(0.2)] * len(stats_df.columns)] * (len(stats_df) - 1),
-            bbox=[0, 0.46, 1, 0.46]
-        )
+        cellText=stats_df.values,
+        colLabels=stats_df.columns,
+        cellLoc='center',
+        loc='center',
+        colColours=['#444444'] * len(stats_df.columns),
+        cellColours=[[self.cmap(0.3)] * len(stats_df.columns)] + [[self.cmap(0.2)] * len(stats_df.columns)] * (len(stats_df) - 1),
+        bbox=[0, 0.82, 1, 0.1]  # 调整高度为0.1，位于0.82位置
+    )
         self._style_table(user_table)
 
-        # 商品信息表格 (下半部分)
+    # 商品信息表格 (下半部分)
         plugin_table = plt.table(
-            cellText=plugin_df.values,
-            colLabels=plugin_df.columns,
-            cellLoc='center',
-            loc='center',
-            colColours=['#444444'] * len(plugin_df.columns),
-            cellColours=[[self.cmap(0.3)] * len(plugin_df.columns)] + [[self.cmap(0.2)] * len(plugin_df.columns)] * (len(plugin_df) - 1),
-            bbox=[0, 0, 1, 0.46]
-        )
+        cellText=plugin_df.values,
+        colLabels=plugin_df.columns,
+        cellLoc='center',
+        loc='center',
+        colColours=['#444444'] * len(plugin_df.columns),
+        cellColours=[[self.cmap(0.3)] * len(plugin_df.columns)] + [[self.cmap(0.2)] * len(plugin_df.columns)] * (len(plugin_df) - 1),
+        bbox=[0, 0, 1, 0.82]  # 调整高度为0.82
+    )
         self._style_table(plugin_table)
 
         return fig
