@@ -98,8 +98,7 @@ class UserService:
             # 生成商品列表图片
             visualizer = CommodityVisualizer()
             fig = visualizer.generate_commodity_list(available_commodities)
-            pic_path = "pic/commodity_list.png"
-            visualizer.save_figure(fig, "commodity_list.png")
+            pic_path = visualizer.save_figure(fig, "commodity_list")
             return True, pic_path
         except Exception as e:
             self.logger.error(f"列出上架商品失败: {e}")
@@ -217,8 +216,10 @@ class UserService:
             if err:
                 return False, err
             
-            if not user_info:
+            if not user_info.get("plugins"):
                 return True, "暂无消费记录和插件持有信息"
+            
+            print(user_info,err)
             
             # 生成用户信息图片
             visualizer = CommodityVisualizer()
