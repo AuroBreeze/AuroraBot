@@ -298,8 +298,10 @@ class GroupService:
             if err:
                 return False, err
             
-            if not user_info:
+            if not user_info.get("plugins"):
                 return True, f"用户 {target_qq} 暂无消费记录和商品持有信息"
+            
+            print(user_info)
             
             # 生成用户信息图片
             visualizer = CommodityVisualizer()

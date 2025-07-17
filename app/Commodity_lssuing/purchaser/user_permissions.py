@@ -26,8 +26,10 @@ class UserService_user_API:
         
         judge,msg_or_err = await self.service.list_available_commodities(self.message)
         if msg_or_err is not None:
-            #await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
-            await QQAPI_list(self.websocket).send_pic_group(self.message.get("group_id"), msg_or_err)
+            if isinstance(msg_or_err, str) and msg_or_err.endswith('.png'):
+                await QQAPI_list(self.websocket).send_pic_group(self.message.get("group_id"), msg_or_err)
+            else:
+                await QQAPI_list(self.websocket).send_group_message(self.message.get("group_id"), msg_or_err)
 
         judge,msg_or_err = await self.service.get_user_info(self.message)
         if msg_or_err is not None:
