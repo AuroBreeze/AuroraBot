@@ -20,7 +20,10 @@ class AuthManager:
         :param permission: 权限名称
         :return: 成功与否
         """
-        return manage_cfg.ADMIN_ID == str(executor_id) # 只有管理员可以管理商品
+        if str(executor_id) in manage_cfg.admin_id_list:
+            return True
+        else:
+            return False
 
 class GroupService:
     """1级权限，群组服务层，封装所有群组相关业务逻辑"""

@@ -5,22 +5,16 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-
-RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
 COPY . .
 
-RUN pip install .
+RUN mkdir -p /app/store/db
+
+
+RUN pip install -e .
 
 EXPOSE 3001
 
-RUN python utils/Create_dirs.py
-
-RUN pip install .
-
-RUN python utils/DataMigrator.py
-
-RUN pip install .
 
 CMD ["python","main.py"]
