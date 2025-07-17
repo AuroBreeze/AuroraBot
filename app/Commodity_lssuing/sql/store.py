@@ -455,6 +455,7 @@ class Store:
                     if not result:
                         conn.commit()
                         return False, f"商品 {plugin_name} 不存在"
+                    
                     amount = 0 if is_welfare else result[0]  # 福利商品amount设为0
 
                 # 添加购买记录
@@ -482,7 +483,7 @@ class Store:
 
     def remove_plugin_ownership(self, qq_id: str, plugin_name: str) -> tuple[bool, str]:
         """
-        删除用户商品持有记录
+        删除用户商品持有记录并减少消费金额
         
         :param qq_id: 用户QQ号
         :param plugin_name: 商品名称
@@ -491,24 +492,51 @@ class Store:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
+
+            # 开始事务
+            conn.execute("BEGIN TRANSACTION")
             
-            # 检查记录是否存在
-            cursor.execute("""
-            SELECT 1 FROM plugin_ownership 
-            WHERE qq_id = ? AND plugin_name = ?
-            """, (qq_id, plugin_name))
-            
-            if not cursor.fetchone():
-                return False, f"用户 {qq_id} 未持有商品 {plugin_name}"
-            
-            # 删除记录
-            cursor.execute("""
-            DELETE FROM plugin_ownership 
-            WHERE qq_id = ? AND plugin_name = ?
-            """, (qq_id, plugin_name))
-            
-            conn.commit()
-            return True, f"已删除用户 {qq_id} 的商品 {plugin_name}"
+            try:
+                # 检查记录是否存在
+                cursor.execute("""
+                SELECT 1 FROM plugin_ownership 
+                WHERE qq_id = ? AND plugin_name = ?
+                """, (qq_id, plugin_name))
+                
+                if not cursor.fetchone():
+                    conn.commit()
+                    return False, f"用户 {qq_id} 未持有商品 {plugin_name}"
+
+                # 获取商品价格（福利商品价格为0）
+                cursor.execute("""
+                SELECT price, is_welfare FROM commodities
+                WHERE name = ?
+                """, (plugin_name,))
+                result = cursor.fetchone()
+                if not result:
+                    conn.commit()
+                    return False, f"商品 {plugin_name} 不存在"
+                
+                price = 0 if result[1] else result[0]  # 福利商品价格为0
+
+                # 更新消费记录（减少金额）
+                cursor.execute("""
+                UPDATE purchase_records
+                SET amount = amount - ?, update_time = CURRENT_TIMESTAMP
+                WHERE qq_id = ?
+                """, (price, qq_id))
+
+                # 删除商品持有记录
+                cursor.execute("""
+                DELETE FROM plugin_ownership 
+                WHERE qq_id = ? AND plugin_name = ?
+                """, (qq_id, plugin_name))
+                
+                conn.commit()
+                return True, f"已删除用户 {qq_id} 的商品 {plugin_name}，并减少消费金额{price}"
+            except Exception as e:
+                conn.rollback()
+                raise e
         except Exception as e:
             self.logger.error(f"删除用户商品持有记录失败: {e}")
             return False, f"删除用户商品持有记录失败: {e}"
@@ -667,7 +695,8 @@ class Store:
                 plugin_details.append({
                     "name": commodity["name"],
                     "price": commodity["price"],
-                    "notes": commodity["notes"]
+                    "notes": commodity["notes"],
+                    "is_welfare": commodity["is_welfare"]
                 })
 
             # 获取消费记录（移除 group_id 参数）

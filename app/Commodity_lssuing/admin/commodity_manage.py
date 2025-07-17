@@ -301,14 +301,14 @@ class GroupService:
             if not user_info.get("plugins"):
                 return True, f"用户 {target_qq} 暂无消费记录和商品持有信息"
             
-            print(user_info)
+            
             
             # 生成用户信息图片
             visualizer = CommodityVisualizer()
             fig = visualizer.generate_user_info({
                 "total_spent": user_info["total_spent"],
                 "plugin_count": len(user_info["plugins"]),
-                "plugins": user_info["plugins"]
+                "plugins": user_info["plugins"],
             }, title=f"用户 {target_qq} 信息")
             
             pic_path = visualizer.save_figure(fig, "user_info")
