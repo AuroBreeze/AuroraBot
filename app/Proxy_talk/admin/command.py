@@ -54,6 +54,11 @@ class Command_API:
         judge,msg_or_err = await self.api.close_message(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            
+        # @消息发送
+        judge,msg_or_err = await self.api.at_talk(self.message, self.websocket)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
 
 class Command:
     """
@@ -178,9 +183,6 @@ class Command:
 
     async def download_file(self, message:dict) -> tuple[bool, str]:
         """下载文件命令"""
-        raw_msg = str(message.get('raw_message'))
-        user_id = str(message.get('user_id'))
-
         msg = message.get("message")
         if msg is not None:
             url = msg[0].get("data").get("url")
@@ -190,20 +192,20 @@ class Command:
         if not url:
             return False, None
 
-        
-        from .. import proxy_cfg
-        if user_id not in proxy_cfg.waiting_for_file or not proxy_cfg.waiting_for_file[user_id]:
-                return False, None
-        else:
-            proxy_cfg.waiting_for_file[user_id] = False
-            
         group_id = str(message.get('group_id'))
         excutor_id = str(message.get('user_id'))
-            
+
         check_judge,check_msg = Auth().check_auth(group_id,excutor_id,3)
         if not check_judge:
             return False, check_msg
+
+        from .. import proxy_cfg
+        if excutor_id not in proxy_cfg.waiting_for_file or not proxy_cfg.waiting_for_file[excutor_id]:
+                return False, None
+        else:
+            proxy_cfg.waiting_for_file[excutor_id] = False
             
+        
         try:
             import requests
             import json
@@ -231,9 +233,17 @@ class Command:
     async def close_message(self, message:dict):
         raw_msg = str(message.get('raw_message'))
 
-        if raw_msg != "2":
+        if raw_msg not in ["2", "4"]:
             self.logger.debug("无效命令格式")
             return False, None
+            
+        # 处理停止命令(4)
+        if raw_msg == "4":
+            group_id = str(message.get('group_id'))
+            from ..proxy_cfg import get_stop_flags
+            stop_flags = get_stop_flags()
+            stop_flags[group_id] = True
+            return True, " 已发送停止指令"
         group_id = str(message.get('group_id'))
         excutor_id = str(message.get('user_id'))
             
@@ -261,3 +271,84 @@ class Command:
         except Exception as e:
             self.logger.error(f"关闭发送消息失败,群号:{group_id},执行者:{excutor_id},错误信息:{e}")
             return False, f" 关闭发送消息失败: {e}"
+        
+    async def at_talk(self, message:dict, websocket) -> tuple[bool, str]:
+        """
+        群内@他人发送txt中的消息
+        """
+        raw_msg = str(message.get('raw_message'))
+        
+        # 使用正则提取qq=后面的数字
+        import re
+        match = re.search(r'\[CQ:at,qq=(\d+)\] 3', raw_msg)
+        if not match:
+            return False, None
+            
+        qq_number = match.group(1)  # 提取到的QQ号
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+            
+        check_judge,check_msg = Auth().check_auth(group_id,excutor_id,3)
+        if not check_judge:
+            return False, check_msg
+            
+        try:
+            # 读取文件内容
+            with open('./store/file/talk.txt', 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            if not content:
+                return False, " 文件内容为空"
+                
+            # 创建发送任务
+            from ..proxy_cfg import get_active_tasks
+            active_tasks = get_active_tasks()
+            if group_id in active_tasks and not active_tasks[group_id].done():
+                return False, " 该群组已有正在运行的发送任务"
+
+            async def send_task():
+                try:
+                    # 读取文件所有非空行
+                    with open('./store/file/talk.txt', 'r', encoding='utf-8') as f:
+                        lines = [line.strip() for line in f if line.strip()]
+                    
+                    if not lines:
+                        return False, " 文件内容为空"
+                        
+                    current_line = 0
+                    while True:
+                        # 检查停止标志
+                        from ..proxy_cfg import get_stop_flags
+                        stop_flags = get_stop_flags()
+                        if stop_flags.get(group_id, False):
+                            stop_flags.pop(group_id, None)
+                            return True, " @消息发送已停止"
+                            
+                        # 发送当前行
+                        await QQAPI_list(websocket).send_at_group_message(
+                            group_id,
+                            qq_number,
+                            " "+lines[current_line]
+                        )
+                        
+                        # 移动到下一行，循环播放
+                        current_line = (current_line + 1) % len(lines)
+                        await asyncio.sleep(int(time_interval) / 1000)
+                        
+                except asyncio.CancelledError:
+                    self.logger.info(f"群组{group_id}的@消息发送任务已取消")
+                    return True, " @消息发送已关闭"
+                except Exception as e:
+                    self.logger.error(f"发送@消息失败: {e}")
+                    return False, f" 发送@消息失败: {e}"
+
+            task = asyncio.create_task(send_task())
+            active_tasks[group_id] = task
+            task.add_done_callback(lambda _: active_tasks.pop(group_id, None))
+            return True, " @消息发送已启动"
+            
+        except FileNotFoundError:
+            return False, " 文件./store/file/file.txt不存在"
+        except Exception as e:
+            return False, f" 发送@消息失败: {e}"
