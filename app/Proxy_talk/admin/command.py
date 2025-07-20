@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 import pytz
 from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
-from ..proxy_cfg import time_interval
+# from ..proxy_cfg import time_interval
 from .. import proxy_cfg
 import asyncio
 
@@ -191,6 +191,7 @@ class Command:
 
             async def send_task():
                 try:
+                    from ..proxy_cfg import time_interval
                     while True:
                         check_judge, check_msg = Auth().check_cfg()
                         if not check_judge:
@@ -237,7 +238,7 @@ class Command:
                 return False, " 时间值必须大于0"
                 
             from .. import proxy_cfg
-            proxy_cfg.time_interval = interval
+            proxy_cfg.time_interval = int(interval)
             return True, f" 发送间隔已设置为: {interval}ms"
         except ValueError:
             return False, " 时间值必须是整数"
@@ -486,7 +487,7 @@ class Command:
                     current_line = 0
                     while True:
                         # 检查停止标志
-                        from ..proxy_cfg import get_stop_flags
+                        from ..proxy_cfg import get_stop_flags,time_interval
                         stop_flags = get_stop_flags()
                         if stop_flags.get(group_id, False):
                             stop_flags.pop(group_id, None)

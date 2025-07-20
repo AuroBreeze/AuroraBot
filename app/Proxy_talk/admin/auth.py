@@ -46,5 +46,5 @@ class Auth:
         # 检查用户权限
         check_judge, check_msg = AuthManager().permission_evaluation_and_assessment(group_id, user_id,int(level))
         if not check_judge:
-            return False, check_msg
+            return False, None
         return True,None
