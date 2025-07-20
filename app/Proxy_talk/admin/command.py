@@ -303,7 +303,7 @@ class Command:
                 os.makedirs('./store/file', exist_ok=True)
                 
                 # 保存文件
-                save_path = './store/file/talk.txt'
+                save_path = f'./store/file/talk_{excutor_id}.txt'
                 with open(save_path, 'w', encoding='utf-8') as f:
                     f.write(response.text)
                     
@@ -407,10 +407,6 @@ class Command:
                     while True:
                         if stop_flags.get(group_id, False):
                             stop_flags.pop(group_id, None)
-                            # await QQAPI_list(websocket).send_group_message(
-                            #     group_id, 
-                            #     "已结束进程"
-                            # )
                             return True, "已结束进程"
                             
                         try:
@@ -464,7 +460,7 @@ class Command:
             
         try:
             # 读取文件内容
-            with open('./store/file/talk.txt', 'r', encoding='utf-8') as f:
+            with open(f'./store/file/talk_{excutor_id}.txt', 'r', encoding='utf-8') as f:
                 content = f.read()
                 
             if not content:
@@ -481,7 +477,7 @@ class Command:
             async def send_task():
                 try:
                     # 读取文件所有非空行
-                    with open('./store/file/talk.txt', 'r', encoding='utf-8') as f:
+                    with open(f'./store/file/talk_{excutor_id}.txt', 'r', encoding='utf-8') as f:
                         lines = [line.strip() for line in f if line.strip()]
                     
                     if not lines:
@@ -522,6 +518,6 @@ class Command:
             return True, " 已启动进程"
             
         except FileNotFoundError:
-            return False, " 文件./store/file/file.txt不存在"
+            return False, f" 文件./store/file/talk_{excutor_id}.txt不存在"
         except Exception as e:
             return False, f" 发送@消息失败: {e}"
