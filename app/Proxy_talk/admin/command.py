@@ -7,6 +7,7 @@ from .. import proxy_cfg
 import asyncio
 
 from .auth import Auth
+from ..sql.store_proxy import StoreProxy
 
 class Command_API:
     def __init__(self,websocket,message):
@@ -72,6 +73,16 @@ class Command_API:
         judge,msg_or_err = await self.api.command_help(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            
+        # 添加授权QQ号
+        judge,msg_or_err = await self.api.add_qq(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            
+        # 删除授权QQ号
+        judge,msg_or_err = await self.api.del_qq(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
 
 class Command:
     """
@@ -132,6 +143,14 @@ class Command:
 9. 下载文件: 
    - 在等待文件状态下发送文件链接
    - 功能: 下载并保存文件内容
+
+10. 添加授权QQ号:
+   - 格式: "#addqq <QQ号>"
+   - 功能: 添加授权QQ号
+
+11. 删除授权QQ号:
+   - 格式: "#delqq <QQ号>"
+   - 功能: 删除授权QQ号
 """
         return True, help_text
 
@@ -437,6 +456,56 @@ class Command:
         except Exception as e:
             self.logger.error(f"处理群名修改命令出错: {str(e)}")
             return False, f"处理命令时发生错误: {str(e)}"
+
+    async def add_qq(self, message:dict) -> tuple[bool, str]:
+        """添加授权QQ号"""
+        raw_msg = str(message.get('raw_message'))
+        if not raw_msg.startswith('#addqq '):
+            return False, None
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+            
+        if excutor_id != proxy_cfg.ADMIN_ID:
+            return False, None
+            
+        try:
+            qq_id = raw_msg.split()[1]
+            if not qq_id.isdigit():
+                return False, "QQ号必须为数字"
+                
+            if StoreProxy().add_qq(qq_id):
+                return True, f"已成功添加授权QQ号: {qq_id}"
+            return False, "添加QQ号失败"
+        except IndexError:
+            return False, "格式错误，应为: #addqq <QQ号>"
+        except Exception as e:
+            return False, f"添加QQ号出错: {str(e)}"
+
+    async def del_qq(self, message:dict) -> tuple[bool, str]:
+        """删除授权QQ号"""
+        raw_msg = str(message.get('raw_message'))
+        if not raw_msg.startswith('#delqq '):
+            return False, None
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+            
+        if excutor_id != proxy_cfg.ADMIN_ID:
+            return False, None
+            
+        try:
+            qq_id = raw_msg.split()[1]
+            if not qq_id.isdigit():
+                return False, "QQ号必须为数字"
+                
+            if StoreProxy().remove_qq(qq_id):
+                return True, f"已成功删除授权QQ号: {qq_id}"
+            return False, "删除QQ号失败或QQ号不存在"
+        except IndexError:
+            return False, "格式错误，应为: #delqq <QQ号>"
+        except Exception as e:
+            return False, f"删除QQ号出错: {str(e)}"
 
     async def at_talk(self, message:dict, websocket) -> tuple[bool, str]:
         """

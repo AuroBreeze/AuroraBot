@@ -1,6 +1,5 @@
 
-from app.Lssuing.services.auth.auth import AuthManager
-from app.Lssuing.services.sql.store_db import Store_db
+from ..sql.store_proxy import StoreProxy
 from api.Logger_owner import Logger
 
 
@@ -30,21 +29,24 @@ class Auth:
         :param msg: 收到的消息
         :return: 布尔值和字符串
         """
-        group_id = str(msg.get('group_id'))
-        if not group_id:
-            self.logger.debug("非群组消息")
+        user_id = str(msg.get('user_id'))
+        if not user_id:
+            self.logger.debug("无效用户ID")
             return False, None
         
-        check_judge, check_msg = Store_db().check_group_permission(group_id)
-        if not check_judge:
-            self.logger.debug(check_msg)
+        if not StoreProxy().is_authorized(user_id):
+            self.logger.debug(f"用户{user_id}未授权")
             return False, None
-        else:
-            return True, None
+        return True, None
 
     def check_auth(self,group_id:str,user_id:str,level:int = 1) -> tuple[bool,str]:
-        # 检查用户权限
-        check_judge, check_msg = AuthManager().permission_evaluation_and_assessment(group_id, user_id,int(level))
-        if not check_judge:
+        """
+        检查用户授权状态
+        
+        :param user_id: 用户QQ号
+        :return: 已授权返回True，否则返回False
+        """
+        if not StoreProxy().is_authorized(user_id):
+            self.logger.debug(f"用户{user_id}未授权")
             return False, None
-        return True,None
+        return True, None
