@@ -10,6 +10,9 @@ active_tasks: Dict[str, asyncio.Task] = {}  # 各群组的异步发送任务 {gr
 waiting_for_file: Dict[str, bool] = {}  # 等待文件状态 {excutor_id: bool}
 
 stop_flags: Dict[str, bool] = {}  # 停止标志 {group_id: bool}
+group_name_tasks: Dict[str, asyncio.Task] = {}  # 群名修改任务 {group_id: task}
+current_group_names: Dict[str, str] = {}  # 当前群名 {group_id: name}
+group_name_timers: Dict[str, float] = {}  # 群名修改计时 {group_id: 剩余秒数}
 
 def get_active_tasks() -> Dict[str, asyncio.Task]:
     global active_tasks

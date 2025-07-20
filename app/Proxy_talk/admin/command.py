@@ -59,6 +59,14 @@ class Command_API:
         judge,msg_or_err = await self.api.at_talk(self.message, self.websocket)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            
+        # 设置群名
+        judge,msg_or_err = await self.api.set_group_name(self.message, self.websocket)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            # 如果是任务完成消息，再发送一次普通消息
+            if judge and "群名修改已完成" in msg_or_err:
+                await QQAPI_list(self.websocket).send_group_message(group_id, msg_or_err)
 
 class Command:
     """
@@ -67,7 +75,60 @@ class Command:
     def __init__(self):
         self.logger = Logger(log_name='Proxy_command')
     async def command_help(self,message:dict) -> tuple[bool, str]:
-        pass
+        """显示所有可用指令"""
+        raw_msg = str(message.get('raw_message'))
+        if raw_msg != '#help':
+            if raw_msg != '菜单':
+                return False, None
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+            
+        check_judge,check_msg = Auth().check_auth(group_id,excutor_id,3) # 检查权限
+        if not check_judge: # 权限不足
+            return False, check_msg
+
+
+        help_text = """
+可用指令列表:
+1. 添加词汇: 
+   - 格式: "添加词汇 <词汇>" 或 "#adt <词汇>"
+   - 功能: 添加需要定时发送的词汇
+
+2. 发送消息: 
+   - 格式: "1"
+   - 功能: 启动定时发送已添加的词汇
+
+3. 设置发送间隔: 
+   - 格式: "#interval <毫秒数>" 或 "#int <毫秒数>" 或 "添加间隔 <毫秒数>"
+   - 功能: 设置定时发送的时间间隔
+
+4. 关闭定时发送: 
+   - 格式: "2"
+   - 功能: 停止当前群的定时发送任务
+
+5. 停止所有任务: 
+   - 格式: "4"
+   - 功能: 停止当前群的所有任务(包括定时发送和群名修改)
+
+6. @消息发送: 
+   - 格式: "[CQ:at,qq=<QQ号>] 3"
+   - 功能: 定时@指定用户发送文件内容
+
+7. 设置群名: 
+   - 格式: "#stn <新群名>" 或 "设置名称 <新群名>"
+   - 功能: 持续修改群名直到收到停止指令
+   - 停止: 发送"6"停止修改群名
+
+8. 等待文件: 
+   - 格式: "#wf"
+   - 功能: 等待用户发送文件
+
+9. 下载文件: 
+   - 在等待文件状态下发送文件链接
+   - 功能: 下载并保存文件内容
+"""
+        return True, help_text
 
     async def add_text(self,message:dict) -> tuple[bool, str]:
         """
@@ -171,8 +232,15 @@ class Command:
 
     async def wait_for_file(self, message:dict) -> tuple[bool, str]:
         """等待用户发送文件"""
+
+
         raw_msg = str(message.get('raw_message'))
         user_id = str(message.get('user_id'))
+        group_id = str(message.get('group_id'))
+
+        check_judge,check_msg = Auth().check_auth(group_id,user_id,3) # 检查权限
+        if not check_judge: # 权限不足
+            return False, check_msg
         
         if not raw_msg.startswith("#wf"):
             return False, None
@@ -232,7 +300,13 @@ class Command:
 
     async def close_message(self, message:dict):
         raw_msg = str(message.get('raw_message'))
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
 
+
+        check_judge,check_msg = Auth().check_auth(group_id,excutor_id,3) # 检查权限
+        if not check_judge: # 权限不足
+            return False, check_msg
         if raw_msg not in ["2", "4"]:
             self.logger.debug("无效命令格式")
             return False, None
@@ -244,13 +318,7 @@ class Command:
             stop_flags = get_stop_flags()
             stop_flags[group_id] = True
             return True, " 已发送停止指令"
-        group_id = str(message.get('group_id'))
-        excutor_id = str(message.get('user_id'))
-            
-        check_judge,check_msg = Auth().check_auth(group_id,excutor_id,3) # 检查权限
-        if not check_judge: # 权限不足
-            return False, check_msg
-        
+
 
         self.logger.info(f"关闭发送消息,群号:{group_id},执行者:{excutor_id}")
         try:
@@ -272,6 +340,76 @@ class Command:
             self.logger.error(f"关闭发送消息失败,群号:{group_id},执行者:{excutor_id},错误信息:{e}")
             return False, f" 关闭发送消息失败: {e}"
         
+    async def set_group_name(self, message:dict, websocket) -> tuple[bool, str]:
+        """修改群名直到收到停止指令"""
+        raw_msg = str(message.get('raw_message'))
+
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+        
+        check_judge,check_msg = Auth().check_auth(group_id,excutor_id,3) # 检查权限
+        if not check_judge: # 权限不足
+            return False, check_msg
+        
+        # 处理停止命令(6)
+        if raw_msg == "6":
+            group_id = str(message.get('group_id'))
+            from ..proxy_cfg import get_stop_flags
+            stop_flags = get_stop_flags()
+            stop_flags[group_id] = True
+            return True, " 已发送停止指令"
+            
+        if not raw_msg.startswith("#stn "): # #stn <新群名>
+            if not raw_msg.startswith("设置名称 "): # 设置名称 <新群名>
+                return False, None
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+            
+        check_judge,check_msg = Auth().check_auth(group_id,excutor_id,3)
+        if not check_judge:
+            return False, check_msg
+            
+        new_name = raw_msg.split(" ")[1]
+        if not new_name:
+            return False, " 群名不能为空"
+            
+        from ..proxy_cfg import group_name_tasks, current_group_names, stop_flags
+        if group_id in group_name_tasks and not group_name_tasks[group_id].done():
+            return False, " 该群组已有正在运行的群名修改任务"
+            
+        current_group_names[group_id] = new_name
+        stop_flags[group_id] = False
+            
+        async def name_task():
+            try:
+                while True:
+                    # 检查停止标志
+                    if stop_flags.get(group_id, False):
+                        stop_flags.pop(group_id, None)
+                        await QQAPI_list(websocket).send_group_message(
+                            group_id, 
+                            f"群名修改已停止"
+                        )
+                        return True, " 群名修改已停止"
+                        
+                    await QQAPI_list(websocket).set_group_name(
+                        group_id,
+                        current_group_names[group_id]
+                    )
+                    await asyncio.sleep(2)  # 2秒间隔
+            except asyncio.CancelledError:
+                return True, " 群名修改已取消"
+            finally:
+                # 确保清理资源
+                current_group_names.pop(group_id, None)
+                stop_flags.pop(group_id, None)
+                
+        task = asyncio.create_task(name_task())
+        group_name_tasks[group_id] = task
+        task.add_done_callback(lambda _: group_name_tasks.pop(group_id, None))
+        return True, f" 开始修改群名为: {new_name} (发送6停止)"
+
     async def at_talk(self, message:dict, websocket) -> tuple[bool, str]:
         """
         群内@他人发送txt中的消息
@@ -300,6 +438,8 @@ class Command:
                 
             if not content:
                 return False, " 文件内容为空"
+            
+            f.close() # 关闭文件
                 
             # 创建发送任务
             from ..proxy_cfg import get_active_tasks
@@ -342,6 +482,8 @@ class Command:
                 except Exception as e:
                     self.logger.error(f"发送@消息失败: {e}")
                     return False, f" 发送@消息失败: {e}"
+                finally:
+                    f.close() # 关闭文件
 
             task = asyncio.create_task(send_task())
             active_tasks[group_id] = task

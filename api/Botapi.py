@@ -146,3 +146,22 @@ class QQAPI_list:
         except Exception as e:
             self.Logger.error(f"发送图片失败: {e}")
             raise
+    async def set_group_name(self, group_id: str, group_name: str):
+        """
+        设置群名称
+        """
+        try:
+            
+            json_message = {
+                "action": "set_group_name",
+                "params": {
+                        "group_id": str(group_id),
+                "group_name": str(group_name)
+            }
+            }
+            await self.websocket.send(json.dumps(json_message))
+            self.Logger.info(f"已设置群名称,群号:{group_id},名称:{group_name}")
+            await asyncio.sleep(1.5)
+        except Exception as e:
+            self.Logger.error(f"设置群名称失败: {e}")
+            raise
