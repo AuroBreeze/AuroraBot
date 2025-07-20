@@ -1,6 +1,7 @@
 
 from ..sql.store_proxy import StoreProxy
 from api.Logger_owner import Logger
+from ..proxy_cfg import ADMIN_ID
 
 
 class Auth:
@@ -34,6 +35,8 @@ class Auth:
             self.logger.debug("无效用户ID")
             return False, None
         
+        if user_id == ADMIN_ID:
+            return True, None
         if not StoreProxy().is_authorized(user_id):
             self.logger.debug(f"用户{user_id}未授权")
             return False, None
@@ -46,6 +49,9 @@ class Auth:
         :param user_id: 用户QQ号
         :return: 已授权返回True，否则返回False
         """
+        if user_id == ADMIN_ID:
+            return True, None
+
         if not StoreProxy().is_authorized(user_id):
             self.logger.debug(f"用户{user_id}未授权")
             return False, None
