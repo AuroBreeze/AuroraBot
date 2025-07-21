@@ -171,3 +171,4 @@ local_model
 *.index
 *.pkl
 study/
+.aider*

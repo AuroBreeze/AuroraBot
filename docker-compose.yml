@@ -2,8 +2,7 @@ version: "3"
 services:
     aurorabot:
         environment:
-            - ACCOUNT=2712065523
-            - WS_ENABLE=true
+            - ACCOUNT=3552638520
         ports:
             - 3001:3001
             - 8082:8082
@@ -16,9 +15,5 @@ services:
     #     restart: always
     #     container_name: AuroraBot-app
     #     depends_on:
-    #         - napcat
+    #         - aurorabot
     #     image: aurora-bot:latest
-
-
-
-

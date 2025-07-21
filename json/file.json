@@ -1,0 +1,33 @@
+{
+    "self_id": 3552638520,
+    "user_id": 1732373074,
+    "time": 1752995987,
+    "message_id": 946657179,
+    "message_seq": 946657179,
+    "real_id": 946657179,
+    "real_seq": "6613",
+    "message_type": "group",
+    "sender": {
+        "user_id": 1732373074,
+        "nickname": "AuroBreeze",
+        "card": "AuroBreeze",
+        "role": "owner"
+    },
+    "raw_message": "[CQ:file,file=123.txt,file_id=/6b3bcc32-e94b-40f2-9541-5a054faedda6,file_size=13,url=https://tjc-download.ftn.qq.com/ftn_handler/2e264eddfe55051ba8306d4fcb02488a1cb1ddcc03c45a659459eb05dd3fd16a830e7e3c1e19f54fad21f868618dfde0657c1bac908383f0ce2e8d2ddd6d7bdb/?fname=]",
+    "font": 14,
+    "sub_type": "normal",
+    "message": [
+        {
+            "type": "file",
+            "data": {
+                "file": "123.txt",
+                "file_id": "/6b3bcc32-e94b-40f2-9541-5a054faedda6",
+                "file_size": "13",
+                "url": "https://tjc-download.ftn.qq.com/ftn_handler/2e264eddfe55051ba8306d4fcb02488a1cb1ddcc03c45a659459eb05dd3fd16a830e7e3c1e19f54fad21f868618dfde0657c1bac908383f0ce2e8d2ddd6d7bdb/?fname="
+            }
+        }
+    ],
+    "message_format": "array",
+    "post_type": "message",
+    "group_id": 736038975
+}

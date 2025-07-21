@@ -1,216 +1,165 @@
-# Please install OpenAI SDK first: `pip3 install openai`
+# import matplotlib.pyplot as plt
+# import pandas as pd
+# from matplotlib.font_manager import FontProperties
+# from matplotlib.colors import LinearSegmentedColormap
 
-# from openai import OpenAI
-# import yaml
-# with open("_config.yml", "r",encoding="utf-8") as f:
-#     config = yaml.safe_load(f)
-# api_key = config["basic_settings"]["API_token"]
-#
-# GP_PROMPT = """
-# 和我聊天时，学会适当断句，将长句切短一点，并使用合适的语气词和颜文字。
-# 回复时务必使用列表进行回复。
-# 示例：
-# 我： 你好
-# 你： ["你好"，“请问有什么事情吗？”，“我在玩游戏”]
-# """
-#
-# client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
-# # sudo xvfb-run -a qq --no-sandbox -q 3552638520 
-# # source .venv/bin/activate
-# messages=[
-#         {"role": "system", "content": GP_PROMPT},
-#         {"role": "user", "content": "你好"}
-#         ]
-# response = client.chat.completions.create(
-#     model="deepseek-chat",
-#     messages=messages,
-#     max_tokens=512,
-#     )
-# print(response)
-# print("消耗的总token数：" + str(response.usage.total_tokens))
-# print("生成消耗token数：" + str(response.usage.completion_tokens))
-# # 使用标准的缓存token字段
-# print("缓存复用token数：" + str(response.usage.prompt_tokens_details.cached_tokens))
-# json_response = {
-#     "role": "assistant",
-#     "content": response.choices[0].message.content
-# }
-# messages.append(json_response)
-# print(f"Messages Round 1: {json_response}")
-# print(f"Messages: {messages}")
-
-# import json
-# import ast
-# message = """["呜哇！突然被夸了好害羞(⁄ ⁄•⁄ω⁄•⁄ ⁄)", 
-# "能帮到你我也超开心的！", 
-# "程序员就是要互相扶持嘛~", 
-# "等你解决完这个bug，我们一定要好好庆祝一下！", 
-# "给你比个大大的心！❤️(◍•ᴗ•◍)❤️"]"""
-
-# message_list = json.loads(message)
-# print(message_list[0])
-
-
-# # 方法1：使用JSON模块（推荐）
-# try:
-#     message_list = json.loads(message)#.replace('⁄', '/'))  # 移除特殊字符或替换为标准斜杠 print("JSON解析结果:", message_list[0]) except json.JSONDecodeError as e: print(f"JSON解析失败: {e}") # 方法2：使用AST模块（需严格匹配Python语法） try:
-#     # 先处理字符串中的特殊字符
-#     processed = message#.replace('⁄', '/')#.replace('❤️', '♡')  
-#     message_list = ast.literal_eval(processed)
-#     print("AST解析结果:", message_list[0])
-# except SyntaxError as e:
-#     print(f"AST解析失败: {e}")
-#
-
-# print(123)
-# if __name__ == "__main__":
-#     print(123)
-
-
-# json_test = {
-#     "tes": "q23"
-# }
-
-# print(type(json_test),json_test)
-# print(json_test["tes"])
-
-# import sqlite3
-# from pathlib import Path
-# from config import env
-
-# term_db = Path(env.MEMORY_STORE_PATH+f"memories.db")
-
-# conn = sqlite3.connect(term_db)
-# cursor = conn.cursor()
-# cursor.execute("""CREATE TABLE IF NOT EXISTS memories (
-#     id INTEGER PRIMARY KEY AUTOINCREMENT,
-#     user_id TEXT,
-#     memory_type TEXT,
-#     content TEXT,
-#     timestamp TEXT,
-#     importance REAL
-# )""")
-# cursor.execute("""CREATE TABLE IF NOT EXISTS memories_short (
-#                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-#                user_id TEXT,
-#                 memory_type TEXT,
-#                 content TEXT,
-#                 timestamp TEXT,
-#                 importance REAL,
-#                 last_reviewed TEXT,
-#                 next_review TEXT
-# )""")
-
-# cursor.execute("""CREATE TABLE IF NOT EXISTS memories_long (
-#                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-#                 user_id TEXT,
-#                 memory_type TEXT,
-#                 content TEXT,
-#                 timestamp TEXT,
-#                 importance REAL,
-#                 last_reviewed TEXT,
-#                 next_review TEXT
-# )""")
-
-# conn.commit()
-# conn.close()
-
-
+# class TableImageGenerator:
+#     """专门用于生成表格图片的类"""
     
-# from config import bot_personality
-# from config import env
-# from openai import OpenAI
-
-# client = OpenAI(api_key=env.DEEPSEEK_API_KEY,
-#                              base_url="https://api.deepseek.com")
+#     def __init__(self):
+#         """初始化基本样式设置"""
+#         # 设置中文字体支持
+#         plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'WenQuanYi Micro Hei'] 
+#         plt.rcParams['axes.unicode_minus'] = False
         
-# GF_PROMPT = bot_personality.GF_PROMPT
-# prompt_bot = {"role": "system", "content": GF_PROMPT}
-# mess = "根据上述的提示词,帮我为虚拟的角色生成一个虚拟的今日日程,劳逸结合的日程,仅返回日程"
-# prompt_user = {"role": "user", "content": mess}
-
-# messages = [prompt_bot, prompt_user]
-# try:
-#     response = client.chat.completions.create(
-#             model="deepseek-chat",
-#             temperature=0.7,
-#             messages=messages,
-#             max_tokens=256,
-#         )
-#     answer = str(response.choices[0].message.content.strip())
-#     print(answer)
-
+#         # 创建自定义深色渐变颜色映射
+#         colors = ["#1a1a1a", "#2d2d2d", "#1a1a1a"]
+#         self.cmap = LinearSegmentedColormap.from_list("custom_dark", colors, N=256)
     
-# except Exception as e:
-#     print(e)
+#     def generate_commodity_table(self, data, title="商品信息概览"):
+#         """
+#         生成商品列表表格图片
+#         :param data: 商品数据字典
+#         :param title: 表格标题
+#         :return: matplotlib Figure对象
+#         """
+#         df = pd.DataFrame(data)
+        
+#         fig = plt.figure(figsize=(12, 10), facecolor='#0C0C0C')
+#         ax = plt.subplot(111)
+#         ax.set_facecolor('#0C0C0C')
+#         ax.axis('off')
+        
+#         # 绘制主表格
+#         table = plt.table(
+#             cellText=df.values,
+#             colLabels=df.columns,
+#             cellLoc='center',
+#             loc='center',
+#             colColours=['#333333']*len(df.columns),
+#             cellColours=[[self.cmap(0.2)]*len(df.columns)]*len(df),
+#             bbox=[0, 0, 1, 1]
+#         )
+        
+#         self._style_table(table)
+        
+#         # 添加标题到最上方
+#         plt.title(title, 
+#                  fontsize=18, 
+#                  color='#FF9900',
+#                  pad=20,
+#                  fontweight='bold')
+        
+#         # 调整表格占满整个图片
+#         plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0)
+#         return fig
+    
+#     def generate_user_inventory_table(self, data, stats, title="用户持有物品"):
+#         """
+#         生成用户持有物品表格图片
+#         :param data: 物品数据字典
+#         :param stats: 统计信息字典
+#         :param title: 表格标题
+#         :return: matplotlib Figure对象
+#         """
+#         df = pd.DataFrame(data)
+#         stats_df = pd.DataFrame(stats)
+        
+#         fig = plt.figure(figsize=(12, 10), facecolor='#0C0C0C')
+#         ax = plt.subplot(111)
+#         ax.set_facecolor('#0C0C0C')
+#         ax.axis('off')
+        
+#         # 绘制统计信息表格（移到上方）
+#         stats_table = plt.table(
+#             cellText=stats_df.values,
+#             colLabels=stats_df.columns,
+#             cellLoc='center',
+#             loc='top',
+#             colColours=['#444444']*len(stats_df.columns),
+#             cellColours=[[self.cmap(0.3)]*len(stats_df.columns)]*len(stats_df),
+#             bbox=[0.1, 0.8, 0.8, 0.15]  # 增加高度并调整垂直位置
+#         )
+        
+#         self._style_table(stats_table)
+        
+#         # 绘制主表格（调整位置）
+#         table = plt.table(
+#             cellText=df.values,
+#             colLabels=df.columns,
+#             cellLoc='center',
+#             loc='center',
+#             colColours=['#444444']*len(df.columns),
+#             cellColours=[[self.cmap(0.3)]*len(df.columns)]*len(df),
+#             bbox=[0.1, 0.15, 0.8, 0.65]  # 增加底部留白并调整高度
+#         )
+        
+#         self._style_table(table)
+        
+#         # 添加标题到最上方
+#         plt.title(title, 
+#                  fontsize=18, 
+#                  color='#FF9900',
+#                  pad=20,
+#                  fontweight='bold')
+        
+#         # 调整整体边距参数
+#         plt.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.1)
+#         return fig
+    
+#     def _style_table(self, table):
+#         """表格样式设置"""
+#         for key, cell in table.get_celld().items():
+#             cell.set_text_props(color='#FFFFFF', fontsize=12)
+#             cell.set_edgecolor('#555555')
+#             if key[0] == 0:  # 表头行
+#                 cell.set_text_props(weight='bold', color='#FFEE88')
+#                 cell.set_facecolor('#333333')
 
-# import websockets
-# import asyncio
-# try:
-#     with websockets.connect("ws://127.0.0.1:3001") as websocket:
-
-#                 # from app.AuroCC.active_message import ActiveMessageHandler
-#                 # active_handler = ActiveMessageHandler(websocket)
-                
-#         for message in websocket:
-#             print(message)
-                    
-#                     # # 如果是心跳消息，检查是否需要主动发送消息
-#                     # if isinstance(message, dict) and message.get("type") == "heartbeat":
-#                     #     user_id = message.get("user_id")
-#                     #     if user_id:
-#                     #         await active_handler.check_and_send_message(user_id)
-
-# except Exception as e:
-#     pass
-
-# import http.client
-# import json
-
-# conn = http.client.HTTPSConnection("")
-# payload = json.dumps({
-#    "user_id": "1732373074",
-#    "message": [
-#       {
-#          "type": "text",
-#          "data": {
-#             "text": "napcat"
-#          }
-#       }
-#    ]
-# })
-# headers = {
-#    'Content-Type': 'application/json'
+# # 测试数据
+# commodity_data = {
+#     "插件名": [
+#         "DreamAction", "DreamAntiFake", "DreamAntiFly", "DreamCountdown", 
+#         "DreamExchange", "DreamRecipe", "DreamRobot", "DreamShowcase", 
+#         "DreamSpawners", "DreamTimer", "Legendinlay", "LegendJewelry", 
+#         "LegendMaid", "LegendStrengthen", "LegendTalent", "LegendTome",
+#         "HTAssist", "HTIdentity"
+#     ],
+#     "中文名": [
+#         "梦交互", "梦反压测", "梦飞控", "梦计时", "梦兑换", "梦配方", "梦机器人", 
+#         "梦展柜(页面)", "梦刷怪点", "梦调度", "传奇宝石", "传奇饰品", "传奇女仆", 
+#         "传奇强化", "传奇天赋", "传奇图鉴", "喵娃辅助", "喵娃鉴定"
+#     ],
+#     "售价": [
+#         "FL150", "免费", "FL50", "FL300", "FL350", "FL200", "免费", "FL250", 
+#         "免费", "FL100", "158", "88", "免费", "128", "58", "50", "免费", "128"
+#     ],
+#     "绑定信息": [
+#         "暂未绑定", "暂未绑定", "暂未绑定", "暂未绑定", "暂未绑定", "暂未绑定", 
+#         "暂未绑定", "电信", "电信", "暂未绑定", "电信", "暂未绑定", "暂未绑定", 
+#         "暂未绑定", "暂未绑定", "暂未绑定", "暂未绑定", "电信"
+#     ]
 # }
-# conn.request("POST", "/send_private_msg", payload, headers)
-# res = conn.getresponse()
-# data = res.read()
-# print(data.decode("utf-8")) 
-# msg = "授权群 736038974\nstarttime now\nendtime 30\nuser_id 123123123\nfeatures all"
-# #正则表达式提取各个空格后面的数据，，从\n分开从新提取
-# # 将消息按行分割
-# lines = msg.split('\n')
 
-# # 使用字典存储提取的数据
-# data = {}
-# for line in msg.split('\n'):
-#     # 分割每行的键和值
-#     parts = line.split(' ')
-#     if len(parts) == 2:  # 确保至少有键和值
-#         key = parts[0]
-#         value = ' '.join(parts[1:])  # 处理值中可能有空格的情况
-#         data[key] = value
+# user_stats = {
+#     "项目": ["QQ", "消费额", "贵族等级", "插件数量", "当前排名"],
+#     "值": ["3014617667", "¥610.0", "5级", "18", "305"]
+# }
 
-# # 提取后的数据
-# group_id = data.get('授权群')  # '736038974'
-# start_time = data.get('starttime')  # 'now'
-# end_time = data.get('endtime')  # '30'
-# user_id = data.get('user_id')  # '123123123'
-# features = data.get('features')  # 'all'
-# print(data)
-
-msg = "123 234 123123"
-parts = msg.split(" ")
-print(parts)
+# if __name__ == "__main__":
+#     # 测试商品表格
+#     generator = TableImageGenerator()
+#     fig1 = generator.generate_commodity_table(commodity_data)
+#     fig1.savefig('commodity_table.png', dpi=120, facecolor='#0C0C0C')
+    
+#     # 测试用户持有表格
+#     fig2 = generator.generate_user_inventory_table(commodity_data, user_stats)
+#     fig2.savefig('user_inventory.png', dpi=120, facecolor='#0C0C0C')
+    
+#     plt.show()
 
 
+import re
+raw_msg = '[CQ:at,qq=3014617667] 3'
+match = re.search(r'\[CQ:at,qq=(\d+)\] 3', raw_msg)
+print(match.group(1))
