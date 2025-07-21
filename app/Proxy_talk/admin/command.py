@@ -157,7 +157,7 @@ class Command:
 3. 设置间隔 -->  添加间隔 <毫秒数>/#interval <毫秒数>/#int <毫秒数>
 4. 关闭发送: 2
 5. 停止所有: 4
-6. 全局停止: 0 (管理员专用)
+6. 全局停止: 停止/0 (管理员专用)
 7. @消息发送: [CQ:at,qq=QQ号] 3
 8. 设置群名 -->  设置名称 <新群名>/#stn <新群名>
 9. 等待文件: #wf5
@@ -165,12 +165,12 @@ class Command:
 11*.添加QQ -->  授权 <QQ号>/#addqq <QQ号>
 12*.删除QQ -->  取消授权 <QQ号>/#delqq <QQ号>
 13*.列出QQ: #listqq
-14*.清空文件: #clearfiles/#cf
-15*.清空词汇: #cleartexts/#ct
-16*.添加白名单群组 --> #addgroup <群号>
-17*.移除白名单群组 --> #delgroup <群号>
-18*.列出白名单群组: #listgroups
-19*.退出非白名单群组: #exitgroups/退群
+14*.清空文件: #cf/#clearfiles
+15*.清空词汇: #ct/#cleartexts
+16*.添加白名单群组 --> 添加白名单群组 <群号>/#addgroup <群号>
+17*.移除白名单群组 --> 删除白名单群组 <群号>/#delgroup <群号>
+18*.列出白名单群组: 列出白名单群组/#listgroups
+19*.退出非白名单群组: 退群/#exitgroups
 """
         return True, help_text
 
@@ -746,7 +746,8 @@ class Command:
         """添加白名单群组"""
         raw_msg = str(message.get('raw_message'))
         if not raw_msg.startswith('#addgroup '):
-            return False, None
+            if raw_msg != "添加白名单群组 ":
+             return False, None
             
         group_id = str(message.get('group_id'))
         excutor_id = str(message.get('user_id'))
@@ -772,7 +773,8 @@ class Command:
         """移除白名单群组"""
         raw_msg = str(message.get('raw_message'))
         if not raw_msg.startswith('#delgroup '):
-            return False, None
+            if raw_msg != "移除白名单群组 ":
+                return False, None
             
         group_id = str(message.get('group_id'))
         excutor_id = str(message.get('user_id'))
@@ -798,7 +800,8 @@ class Command:
         """列出所有白名单群组"""
         raw_msg = str(message.get('raw_message'))
         if raw_msg != '#listgroups':
-            return False, None
+            if raw_msg != "列出白名单群组 ":
+                return False, None
             
         group_id = str(message.get('group_id'))
         excutor_id = str(message.get('user_id'))
