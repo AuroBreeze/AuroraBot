@@ -1,9 +1,10 @@
+﻿# -*- coding: utf-8 -*-
 from datetime import datetime, timedelta
 import pytz
 from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 # from ..proxy_cfg import time_interval
-from .. import proxy_cfg
+# from .. import proxy_cfg
 import asyncio
 
 from .auth import Auth
@@ -21,9 +22,9 @@ class Command_API:
         group_id = str(self.message.get('group_id'))
         excutor_id = str(self.message.get('user_id'))
 
-        judge,msg_or_err = await self.api.approve_other_join_group(self.websocket,self.message)
-        if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_group_message(group_id,msg_or_err)
+        # judge,msg_or_err = await self.api.approve_other_join_group(self.websocket,self.message)
+        # if msg_or_err is not None:
+        #     await QQAPI_list(self.websocket).send_group_message(group_id,msg_or_err)
 
         check_judge,check_msg = Auth().check_msg(self.message)
         if not check_judge:
@@ -90,6 +91,26 @@ class Command_API:
         judge,msg_or_err = await self.api.del_qq(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            
+        # 列出授权QQ号
+        judge,msg_or_err = await self.api.list_auth_members(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            
+        # 清空下载的文件
+        judge,msg_or_err = await self.api.clear_downloaded_files(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            
+        # 清空添加的词汇
+        judge,msg_or_err = await self.api.clear_added_texts(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+
+        # 响应
+        judge,msg_or_err = await self.api.response(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
 
 
 
@@ -115,51 +136,21 @@ class Command:
 
 
         help_text = """
-可用指令列表:
-1. 添加词汇: 
-   - 格式: "添加词汇 <词汇>" 或 "#adt <词汇>"
-   - 功能: 添加需要定时发送的词汇
-
-2. 发送消息: 
-   - 格式: "1"
-   - 功能: 启动定时发送已添加的词汇
-
-3. 设置发送间隔: 
-   - 格式: "#interval <毫秒数>" 或 "#int <毫秒数>" 或 "添加间隔 <毫秒数>"
-   - 功能: 设置定时发送的时间间隔
-
-4. 关闭定时发送: 
-   - 格式: "2"
-   - 功能: 停止当前群的定时发送任务
-
-5. 停止所有任务: 
-   - 格式: "4"
-   - 功能: 停止当前群的所有任务(包括定时发送和群名修改)
-
-6. @消息发送: 
-   - 格式: "[CQ:at,qq=<QQ号>] 3"
-   - 功能: 定时@指定用户发送文件内容
-
-7. 设置群名: 
-   - 格式: "#stn <新群名>" 或 "设置名称 <新群名>"
-   - 功能: 持续修改群名直到收到停止指令
-   - 停止: 发送"6"停止修改群名
-
-8. 等待文件: 
-   - 格式: "#wf"
-   - 功能: 等待用户发送文件
-
-9. 下载文件: 
-   - 在等待文件状态下发送文件链接
-   - 功能: 下载并保存文件内容
-
-10. 添加授权QQ号:
-   - 格式: "#addqq <QQ号>"
-   - 功能: 添加授权QQ号
-
-11. 删除授权QQ号:
-   - 格式: "#delqq <QQ号>"
-   - 功能: 删除授权QQ号
+可用指令列表(管理员命令标记为*):
+1. 添加词汇 -->  添加词汇 <词汇>/#adt <词汇>
+2. 发送消息: 1
+3. 设置间隔 -->  添加间隔 <毫秒数>/#interval <毫秒数>/#int <毫秒数>
+4. 关闭发送: 2
+5. 停止所有: 4
+6. @消息发送: [CQ:at,qq=QQ号] 3
+7. 设置群名 -->  设置名称 <新群名>/#stn <新群名>
+8. 等待文件: #wf
+9. 下载文件: (在#wf状态下发送文件)
+10*.添加QQ -->  授权 <QQ号>/#addqq <QQ号>
+11*.删除QQ -->  取消授权 <QQ号>/#delqq <QQ号>
+12*.列出QQ: #listqq
+13*.清空文件: #clearfiles/#cf
+14*.清空词汇: #cleartexts/#ct
 """
         return True, help_text
 
@@ -187,6 +178,8 @@ class Command:
         if not raw_msg: # 没有输入词汇
             return False, ' 消息内容为空'
         
+        from .. import proxy_cfg
+        
         proxy_cfg.add_text = word
         #print(add_text)
 
@@ -207,6 +200,8 @@ class Command:
             check_judge, check_msg = Auth().check_auth(group_id, excutor_id, 3)
             if not check_judge:
                 return False, check_msg
+            
+            from .. import proxy_cfg
 
             add_text = proxy_cfg.add_text
             self.logger.info(f"发送消息:{add_text},群号:{group_id},执行者:{excutor_id}")
@@ -284,7 +279,7 @@ class Command:
         if not check_judge: # 权限不足
             return False, check_msg
         
-        if not raw_msg.startswith("#wf"):
+        if raw_msg != "#wf":
             return False, None
             
         from .. import proxy_cfg
@@ -468,11 +463,14 @@ class Command:
     async def add_qq(self, message:dict) -> tuple[bool, str]:
         """添加授权QQ号"""
         raw_msg = str(message.get('raw_message'))
-        if not raw_msg.startswith('#addqq '):
-            return False, None
+        if not raw_msg.startswith('#addqq '): # #addqq <QQ号>
+            if not raw_msg.startswith("授权 "): # 授权 <QQ号>
+                return False, None
             
         group_id = str(message.get('group_id'))
         excutor_id = str(message.get('user_id'))
+
+        from .. import proxy_cfg
             
         if excutor_id != proxy_cfg.ADMIN_ID:
             return False, None
@@ -484,21 +482,23 @@ class Command:
                 
             if StoreProxy().add_qq(qq_id):
                 return True, f"已成功添加授权QQ号: {qq_id}"
-            return False, "添加QQ号失败"
+            return False, "授权QQ号失败"
         except IndexError:
             return False, "格式错误，应为: #addqq <QQ号>"
         except Exception as e:
-            return False, f"添加QQ号出错: {str(e)}"
+            return False, f"授权QQ号出错: {str(e)}"
 
     async def del_qq(self, message:dict) -> tuple[bool, str]:
         """删除授权QQ号"""
         raw_msg = str(message.get('raw_message'))
-        if not raw_msg.startswith('#delqq '):
-            return False, None
+        if not raw_msg.startswith('#delqq '): # #delqq <QQ号>
+            if not raw_msg.startswith("取消授权 "): # 取消授权 <QQ号>
+                return False, None
             
         group_id = str(message.get('group_id'))
         excutor_id = str(message.get('user_id'))
             
+        from .. import proxy_cfg
         if excutor_id != proxy_cfg.ADMIN_ID:
             return False, None
             
@@ -508,12 +508,12 @@ class Command:
                 return False, "QQ号必须为数字"
                 
             if StoreProxy().remove_qq(qq_id):
-                return True, f"已成功删除授权QQ号: {qq_id}"
-            return False, "删除QQ号失败或QQ号不存在"
+                return True, f"已成功取消授权QQ号: {qq_id}"
+            return False, "取消授权QQ号失败或QQ号不存在"
         except IndexError:
             return False, "格式错误，应为: #delqq <QQ号>"
         except Exception as e:
-            return False, f"删除QQ号出错: {str(e)}"
+            return False, f"取消授权QQ号出错: {str(e)}"
 
     async def at_talk(self, message:dict, websocket) -> tuple[bool, str]:
         """
@@ -618,3 +618,82 @@ class Command:
             return False, None #"已拒绝或忽略 用户{user_id}请求".format(user_id=user_id)
         except Exception as e:
             return False, f"审批其他人加入群出错: {str(e)}"
+    async def list_auth_members(self, message:dict) -> tuple[bool, str]:
+        """
+        列出授权成员
+        """
+        raw_msg = str(message.get('raw_message'))
+        if raw_msg != '#listqq':
+            return False, None
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+
+        from .. import proxy_cfg
+            
+        if excutor_id != proxy_cfg.ADMIN_ID:
+            return False, None
+            
+        auth_list = StoreProxy().list_all()
+        if not auth_list:
+            return True, "当前没有授权用户"
+            
+        auth_text = "授权用户列表:\n" + "\n".join(f"{i+1}. {qq}" for i, qq in enumerate(auth_list))
+        return True, auth_text
+
+    async def clear_downloaded_files(self, message:dict) -> tuple[bool, str]:
+        """清空下载的文件"""
+        raw_msg = str(message.get('raw_message'))
+        if raw_msg != '#clearfiles':
+            if raw_msg != "#cf":
+                return False, None
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+
+        from .. import proxy_cfg
+            
+        if excutor_id != proxy_cfg.ADMIN_ID:
+            return False, None
+            
+        import os
+        import glob
+        try:
+            files = glob.glob('./store/file/*.txt')
+            for f in files:
+                os.remove(f)
+            return True, "文本已清空"
+        except Exception as e:
+            return False, f"清空文件失败: {str(e)}"
+
+    async def clear_added_texts(self, message:dict) -> tuple[bool, str]:
+        """清空添加的词汇"""
+        raw_msg = str(message.get('raw_message'))
+        if raw_msg != '#cleartexts':
+            if raw_msg != "#ct":
+                return False, None
+
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+
+        
+        from .. import proxy_cfg
+            
+        if excutor_id != proxy_cfg.ADMIN_ID:
+            return False, None
+            
+        try:
+            from .. import proxy_cfg
+            proxy_cfg.add_text = ""
+            return True, "词汇已清空"
+        except Exception as e:
+            return False, f"清空词汇失败: {str(e)}"
+    async def response(self, message:dict) -> tuple[bool, str]:
+        """响应"""
+        raw_msg = str(message.get('raw_message'))
+        if raw_msg != '71':
+            return False, None
+        
+        return True, " 主人我在"
+
