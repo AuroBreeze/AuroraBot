@@ -163,6 +163,10 @@ class Command:
         if not raw_msg.startswith('添加词汇 '): # 添加词汇 <词汇>
             if not raw_msg.startswith('#adt '): # #adt <词汇>
                 return False, None
+            else:
+                word = raw_msg[4:]
+        else:
+            word = raw_msg[4:]
             
         group_id = str(message.get('group_id'))
         excutor_id = str(message.get('user_id'))
@@ -173,12 +177,7 @@ class Command:
         
         if not raw_msg: # 没有输入词汇
             return False, ' 消息内容为空'
-
-        part = raw_msg.split(" ")
-        if len(part) < 2 or len(part) > 3: # 词汇为空
-            return False, " 参数数量错误"
         
-        word = part[1]
         proxy_cfg.add_text = word
         #print(add_text)
 

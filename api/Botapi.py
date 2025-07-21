@@ -27,7 +27,7 @@ class QQAPI_list:
         }
         await self.websocket.send(json.dumps(json_message))
         self.Logger.info("发送消息:%s,接收者:%s"%(message,user_id))
-        await asyncio.sleep(2)
+        # await asyncio.sleep(2)
     async def send_group_message(self,group_id:str,message:str):
         """
         发送群消息
@@ -53,7 +53,7 @@ class QQAPI_list:
         }
         await self.websocket.send(json.dumps(json_message))
         self.Logger.info("发送群消息:%s,群号:%s"%(message,group_id))
-        await asyncio.sleep(1.5)
+        # await asyncio.sleep(1.5)
     
     async def send_at_group(self,group_id:str,user_id:str):
         """
@@ -80,7 +80,7 @@ class QQAPI_list:
         }
         await self.websocket.send(json.dumps(json_message))
         self.logger.info(f"已发送群@消息,@{user_id}")
-        await asyncio.sleep(1.5)
+        # await asyncio.sleep(1.5)
     async def send_at_group_message(self,group_id:str,user_id:str,message:str):
         """
         发送群聊at消息
@@ -113,7 +113,7 @@ class QQAPI_list:
             }
         await self.websocket.send(json.dumps(json_message))
         self.Logger.info(f"已发送群@消息,@{user_id},消息:{message}")
-        await asyncio.sleep(1.5)
+        # await asyncio.sleep(1.5)
     async def send_pic_group(self, group_id: str, pic_path: str):
         """
         发送群聊图片
@@ -142,7 +142,7 @@ class QQAPI_list:
             
             await self.websocket.send(json.dumps(json_message))
             self.Logger.info(f"已发送群图片,群号:{group_id},图片:{pic_path}")
-            await asyncio.sleep(1.5)
+            # await asyncio.sleep(1.5)
         except Exception as e:
             self.Logger.error(f"发送图片失败: {e}")
             raise
@@ -156,12 +156,32 @@ class QQAPI_list:
                 "action": "set_group_name",
                 "params": {
                         "group_id": str(group_id),
-                "group_name": str(group_name)
-            }
-            }
+                        "group_name": str(group_name)
+                        }
+                }
             await self.websocket.send(json.dumps(json_message))
             self.Logger.info(f"已设置群名称,群号:{group_id},名称:{group_name}")
-            await asyncio.sleep(1.5)
+            # await asyncio.sleep(1.5)
         except Exception as e:
             self.Logger.error(f"设置群名称失败: {e}")
+            raise
+    async def set_group_add_request(self, flag: str, approve: bool):
+        """
+        设置群名称
+        """
+        try:
+            
+            json_message = {
+                "action": "set_group_add_request",
+                "params": {
+                        "flag": str(flag),
+                        "approve": approve,
+                        "reason": "string"
+                        }
+                    }
+            await self.websocket.send(json.dumps(json_message))
+            self.Logger.info(f"已设置群添加请求,flag:{flag},approve:{approve}")
+            # await asyncio.sleep(1.5)
+        except Exception as e:
+            self.Logger.error(f"设置群添加请求失败: {e}")
             raise
