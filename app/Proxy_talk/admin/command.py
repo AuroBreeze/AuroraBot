@@ -142,15 +142,16 @@ class Command:
 3. 设置间隔 -->  添加间隔 <毫秒数>/#interval <毫秒数>/#int <毫秒数>
 4. 关闭发送: 2
 5. 停止所有: 4
-6. @消息发送: [CQ:at,qq=QQ号] 3
-7. 设置群名 -->  设置名称 <新群名>/#stn <新群名>
-8. 等待文件: #wf
-9. 下载文件: (在#wf状态下发送文件)
-10*.添加QQ -->  授权 <QQ号>/#addqq <QQ号>
-11*.删除QQ -->  取消授权 <QQ号>/#delqq <QQ号>
-12*.列出QQ: #listqq
-13*.清空文件: #clearfiles/#cf
-14*.清空词汇: #cleartexts/#ct
+6. 全局停止: 停止/0 (管理员专用)
+7. @消息发送: [CQ:at,qq=QQ号] 3
+8. 设置群名 -->  设置名称 <新群名>/#stn <新群名>
+9. 等待文件: #wf5
+10. 下载文件: (在#wf5状态下发送文件)
+11*.添加QQ -->  授权 <QQ号>/#addqq <QQ号>
+12*.删除QQ -->  取消授权 <QQ号>/#delqq <QQ号>
+13*.列出QQ: #listqq
+14*.清空文件: #clearfiles/#cf
+15*.清空词汇: #cleartexts/#ct
 """
         return True, help_text
 
@@ -279,7 +280,7 @@ class Command:
         if not check_judge: # 权限不足
             return False, check_msg
         
-        if raw_msg != "#wf":
+        if raw_msg != "#wf5":
             return False, None
             
         from .. import proxy_cfg
@@ -355,7 +356,7 @@ class Command:
         check_judge,check_msg = Auth().check_auth(group_id,excutor_id,3) # 检查权限
         if not check_judge: # 权限不足
             return False, check_msg
-        if raw_msg not in ["2", "4"]:
+        if raw_msg not in ["2", "4", "停止", "0"]:
             self.logger.debug("无效命令格式")
             return False, None
             
@@ -366,6 +367,29 @@ class Command:
             stop_flags = get_stop_flags()
             stop_flags[group_id] = True
             return True, " 已结束进程"
+            
+        # 处理全局停止命令(0)
+        if raw_msg == "停止" or raw_msg == "0":
+            from .. import proxy_cfg
+            if excutor_id != proxy_cfg.ADMIN_ID:
+                return False, " 只有管理员可以使用全局停止功能"
+                
+            from ..proxy_cfg import get_active_tasks, get_stop_flags
+            active_tasks = get_active_tasks()
+            stop_flags = get_stop_flags()
+            
+            # 停止所有群组的发送任务
+            for group_id in list(active_tasks.keys()):
+                task = active_tasks[group_id]
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                active_tasks.pop(group_id, None)
+                
+            return True, " 已停止所有群组的发送任务"
 
 
         self.logger.info(f"关闭发送消息,群号:{group_id},执行者:{excutor_id}")
@@ -528,6 +552,10 @@ class Command:
             return False, None
             
         qq_number = match.group(1)  # 提取到的QQ号
+
+        from ..proxy_cfg import ADMIN_ID
+        if qq_number == ADMIN_ID:
+            return False, " 不许大逆不道你71爷爷"
             
         group_id = str(message.get('group_id'))
         excutor_id = str(message.get('user_id'))
@@ -547,8 +575,13 @@ class Command:
             f.close() # 关闭文件
                 
             # 创建发送任务
-            from ..proxy_cfg import get_active_tasks
+            from ..proxy_cfg import get_active_tasks, get_stop_flags
             active_tasks = get_active_tasks()
+            stop_flags = get_stop_flags()
+            
+            # 清除该群组的停止标志
+            stop_flags.pop(group_id, None)
+            
             if group_id in active_tasks and not active_tasks[group_id].done():
                 return False, " 该群组已有正在运行的发送任务"
 
@@ -696,4 +729,3 @@ class Command:
             return False, None
         
         return True, " 主人我在"
-
