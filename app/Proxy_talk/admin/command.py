@@ -18,57 +18,57 @@ class Command_API:
         self.api = Command()
     
     async def handle_command(self) -> tuple[bool, str]:
-
         group_id = str(self.message.get('group_id'))
         excutor_id = str(self.message.get('user_id'))
-
-        # judge,msg_or_err = await self.api.approve_other_join_group(self.websocket,self.message)
-        # if msg_or_err is not None:
-        #     await QQAPI_list(self.websocket).send_group_message(group_id,msg_or_err)
 
         check_judge,check_msg = Auth().check_msg(self.message)
         if not check_judge:
             return False, check_msg
 
         # 处理命令
-
-        # 添加词汇
         judge,msg_or_err = await self.api.add_text(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
         
-        # 发送消息
         judge,msg_or_err = await self.api.send_message(self.message,self.websocket,group_id)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
         
-        # 设置发送间隔
         judge,msg_or_err = await self.api.set_interval(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
             
-        # 等待文件
         judge,msg_or_err = await self.api.wait_for_file(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
             
-        # 下载文件
         judge,msg_or_err = await self.api.download_file(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
             
-        # 关闭定时发送
         judge,msg_or_err = await self.api.close_message(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
             
-        # @消息发送
         judge,msg_or_err = await self.api.at_talk(self.message, self.websocket)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
             
-        # 设置群名
         judge,msg_or_err = await self.api.set_group_name(self.message, self.websocket)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            if judge and "群名修改已完成" in msg_or_err:
+                await QQAPI_list(self.websocket).send_group_message(group_id, msg_or_err)
+
+        judge,msg_or_err = await self.api.command_help(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            
+        judge,msg_or_err = await self.api.add_qq(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            
+        judge,msg_or_err = await self.api.del_qq(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
             # 如果是任务完成消息，再发送一次普通消息
@@ -110,18 +110,23 @@ class Command_API:
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
 
+        # 列出群组
         judge,msg_or_err = await self.api.list_groups(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
-        
+        # 添加群组
         judge,msg_or_err = await self.api.add_group(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
-        
+        # 删除群组
         judge,msg_or_err = await self.api.remove_group(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
 
+        # 退出所有非白名单群组
+        judge,msg_or_err = await self.api.exit_non_whitelist_groups(self.message, self.websocket)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
 
 
 class Command:
@@ -165,6 +170,7 @@ class Command:
 16*.添加白名单群组 --> #addgroup <群号>
 17*.移除白名单群组 --> #delgroup <群号>
 18*.列出白名单群组: #listgroups
+19*.退出非白名单群组: #exitgroups/退群
 """
         return True, help_text
 
@@ -708,9 +714,9 @@ class Command:
             files = glob.glob('./store/file/*.txt')
             for f in files:
                 os.remove(f)
-            return True, "文本已清空"
+            return True, " 文本已清空"
         except Exception as e:
-            return False, f"清空文件失败: {str(e)}"
+            return False, f" 清空文件失败: {str(e)}"
 
     async def clear_added_texts(self, message:dict) -> tuple[bool, str]:
         """清空添加的词汇"""
@@ -732,9 +738,9 @@ class Command:
         try:
             from .. import proxy_cfg
             proxy_cfg.add_text = ""
-            return True, "词汇已清空"
+            return True, " 词汇已清空"
         except Exception as e:
-            return False, f"清空词汇失败: {str(e)}"
+            return False, f" 清空词汇失败: {str(e)}"
 
     async def add_group(self, message:dict) -> tuple[bool, str]:
         """添加白名单群组"""
@@ -803,10 +809,50 @@ class Command:
             
         groups = StoreProxy().list_groups()
         if not groups:
-            return False, " 当前没有白名单群组"
+            return True, " 当前没有白名单群组"
             
         groups_text = " 白名单群组列表:\n" + "\n".join(f"{i+1}. {group}" for i, group in enumerate(groups))
         return True, groups_text
+
+    async def exit_non_whitelist_groups(self, message:dict, websocket) -> tuple[bool, str]:
+        """退出所有不在白名单中的群组"""
+        raw_msg = str(message.get('raw_message'))
+        if raw_msg != '#exitgroups':
+            if raw_msg != "退群":
+                return False, None
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+            
+        from .. import proxy_cfg
+        if excutor_id != proxy_cfg.ADMIN_ID:
+            return False, None
+            
+        try:
+            # 获取白名单群组
+            whitelist = set(StoreProxy().list_groups())
+            
+            # 获取当前加入的所有群组
+            api = QQAPI_list(websocket)
+            all_groups = await api.get_group_list()
+            #print(all_groups)
+            if not all_groups:
+                return False, " 获取群组列表失败"
+            
+            # 找出不在白名单中的群组
+            non_whitelist = [g for g in all_groups if g not in whitelist]
+            
+            if not non_whitelist:
+                return True, " 当前没有需要退出的非白名单群组"
+                
+            # 退出这些群组
+            for group in non_whitelist:
+                await api.set_group_leave(group)
+                
+            return True, f" 已退出以下非白名单群组: {', '.join(non_whitelist)}"
+            
+        except Exception as e:
+            return False, f" 退出非白名单群组失败: {str(e)}"
     async def response(self, message:dict) -> tuple[bool, str]:
         """响应"""
         raw_msg = str(message.get('raw_message'))
