@@ -27,6 +27,14 @@ class StoreProxy:
             create_time DATETIME DEFAULT CURRENT_TIMESTAMP
         )
         """)
+        
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS whitelist_groups (
+            group_id TEXT PRIMARY KEY,
+            create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(group_id)
+        )
+        """)
         self.conn.commit()
 
     def add_qq(self, qq_id: str) -> bool:
@@ -111,6 +119,90 @@ class StoreProxy:
             return [row[0] for row in cursor.fetchall()]
         except Exception as e:
             self.logger.error(f"列出授权QQ号失败: {e}")
+            return []
+
+    def add_group(self, group_id: str) -> bool:
+        """
+        添加白名单群组
+        
+        :param group_id: 群号
+        :return: 成功返回True，失败返回False
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+            INSERT OR IGNORE INTO whitelist_groups (group_id)
+            VALUES (?)
+            """, (group_id,))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            self.logger.error(f"添加白名单群组失败: {e}")
+            return False
+
+    def remove_group(self, group_id: str) -> bool:
+        """
+        移除白名单群组
+        
+        :param group_id: 群号
+        :return: 成功返回True，失败返回False
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+            DELETE FROM whitelist_groups 
+            WHERE group_id = ?
+            """, (group_id,))
+            
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            self.logger.error(f"移除白名单群组失败: {e}")
+            return False
+
+    def is_whitelisted(self, group_id: str) -> bool:
+        """
+        检查群组是否在白名单
+        
+        :param group_id: 群号
+        :return: 在白名单返回True，否则返回False
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+            SELECT COUNT(*) FROM whitelist_groups 
+            WHERE group_id = ?
+            """, (group_id,))
+            
+            return cursor.fetchone()[0] > 0
+        except Exception as e:
+            self.logger.error(f"检查白名单群组失败: {e}")
+            return False
+
+    def list_groups(self) -> list:
+        """
+        列出所有白名单群组
+        
+        :return: 群号列表
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+            SELECT group_id FROM whitelist_groups
+            """)
+            
+            return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            self.logger.error(f"列出白名单群组失败: {e}")
             return []
 
 if __name__ == '__main__':

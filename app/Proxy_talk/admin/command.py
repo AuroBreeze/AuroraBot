@@ -29,8 +29,6 @@ class Command_API:
         check_judge,check_msg = Auth().check_msg(self.message)
         if not check_judge:
             return False, check_msg
-        
-
 
         # 处理命令
 
@@ -112,6 +110,18 @@ class Command_API:
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
 
+        judge,msg_or_err = await self.api.list_groups(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+        
+        judge,msg_or_err = await self.api.add_group(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+        
+        judge,msg_or_err = await self.api.remove_group(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+
 
 
 class Command:
@@ -142,7 +152,7 @@ class Command:
 3. 设置间隔 -->  添加间隔 <毫秒数>/#interval <毫秒数>/#int <毫秒数>
 4. 关闭发送: 2
 5. 停止所有: 4
-6. 全局停止: 停止/0 (管理员专用)
+6. 全局停止: 0 (管理员专用)
 7. @消息发送: [CQ:at,qq=QQ号] 3
 8. 设置群名 -->  设置名称 <新群名>/#stn <新群名>
 9. 等待文件: #wf5
@@ -152,6 +162,9 @@ class Command:
 13*.列出QQ: #listqq
 14*.清空文件: #clearfiles/#cf
 15*.清空词汇: #cleartexts/#ct
+16*.添加白名单群组 --> #addgroup <群号>
+17*.移除白名单群组 --> #delgroup <群号>
+18*.列出白名单群组: #listgroups
 """
         return True, help_text
 
@@ -722,6 +735,78 @@ class Command:
             return True, "词汇已清空"
         except Exception as e:
             return False, f"清空词汇失败: {str(e)}"
+
+    async def add_group(self, message:dict) -> tuple[bool, str]:
+        """添加白名单群组"""
+        raw_msg = str(message.get('raw_message'))
+        if not raw_msg.startswith('#addgroup '):
+            return False, None
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+            
+        from .. import proxy_cfg
+        if excutor_id != proxy_cfg.ADMIN_ID:
+            return False, None
+            
+        try:
+            target_group = raw_msg.split()[1]
+            if not target_group.isdigit():
+                return False, " 群号必须为数字"
+                
+            if StoreProxy().add_group(target_group):
+                return True, f" 已添加白名单群组: {target_group}"
+            return False, " 添加白名单群组失败"
+        except IndexError:
+            return False, " 格式错误，应为: #addgroup <群号>"
+        except Exception as e:
+            return False, f" 添加白名单群组出错: {str(e)}"
+
+    async def remove_group(self, message:dict) -> tuple[bool, str]:
+        """移除白名单群组"""
+        raw_msg = str(message.get('raw_message'))
+        if not raw_msg.startswith('#delgroup '):
+            return False, None
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+            
+        from .. import proxy_cfg
+        if excutor_id != proxy_cfg.ADMIN_ID:
+            return False, None
+            
+        try:
+            target_group = raw_msg.split()[1]
+            if not target_group.isdigit():
+                return False, " 群号必须为数字"
+                
+            if StoreProxy().remove_group(target_group):
+                return True, f" 已移除白名单群组: {target_group}"
+            return False, " 移除白名单群组失败或群组不存在"
+        except IndexError:
+            return False, " 格式错误，应为: #delgroup <群号>"
+        except Exception as e:
+            return False, f" 移除白名单群组出错: {str(e)}"
+
+    async def list_groups(self, message:dict) -> tuple[bool, str]:
+        """列出所有白名单群组"""
+        raw_msg = str(message.get('raw_message'))
+        if raw_msg != '#listgroups':
+            return False, None
+            
+        group_id = str(message.get('group_id'))
+        excutor_id = str(message.get('user_id'))
+            
+        from .. import proxy_cfg
+        if excutor_id != proxy_cfg.ADMIN_ID:
+            return False, None
+            
+        groups = StoreProxy().list_groups()
+        if not groups:
+            return False, " 当前没有白名单群组"
+            
+        groups_text = " 白名单群组列表:\n" + "\n".join(f"{i+1}. {group}" for i, group in enumerate(groups))
+        return True, groups_text
     async def response(self, message:dict) -> tuple[bool, str]:
         """响应"""
         raw_msg = str(message.get('raw_message'))

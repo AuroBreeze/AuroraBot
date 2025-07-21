@@ -185,3 +185,38 @@ class QQAPI_list:
         except Exception as e:
             self.Logger.error(f"设置群添加请求失败: {e}")
             raise
+    async def get_group_list(self, no_cache: bool = False):
+        """
+        获取群列表
+        """
+        try:
+            json_message = {
+                "action": "get_group_list",
+                "params": {
+                        "no_cache": no_cache
+                        }
+                    }
+            await self.websocket.send(json.dumps(json_message))
+            self.Logger.info(f"已获取群列表,no_cache:{no_cache}")
+            # await asyncio.sleep(1.5)
+        except Exception as e:
+            self.Logger.error(f"获取群列表失败: {e}")
+            raise
+    async def set_group_leave(self, group_id: str, is_dismiss: bool = True):
+        """
+        退出群聊
+        """
+        try:
+            json_message = {
+                "action": "set_group_leave",
+                "params": {
+                        "group_id": str(group_id),
+                        "is_dismiss": is_dismiss
+                        }
+                    }
+            await self.websocket.send(json.dumps(json_message))
+            self.Logger.info(f"已退出群聊,群号:{group_id},是否解散:{is_dismiss}")
+            # await asyncio.sleep(1.5)
+        except Exception as e:
+            self.Logger.error(f"退出群聊失败: {e}")
+            raise
