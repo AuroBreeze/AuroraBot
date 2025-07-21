@@ -17,12 +17,19 @@ class Command_API:
         self.api = Command()
     
     async def handle_command(self) -> tuple[bool, str]:
+
+        group_id = str(self.message.get('group_id'))
+        excutor_id = str(self.message.get('user_id'))
+
+        judge,msg_or_err = await self.api.approve_other_join_group(self.websocket,self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_group_message(group_id,msg_or_err)
+
         check_judge,check_msg = Auth().check_msg(self.message)
         if not check_judge:
             return False, check_msg
         
-        group_id = str(self.message.get('group_id'))
-        excutor_id = str(self.message.get('user_id'))
+
 
         # 处理命令
 
@@ -83,6 +90,8 @@ class Command_API:
         judge,msg_or_err = await self.api.del_qq(self.message)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+
+
 
 class Command:
     """
@@ -590,3 +599,22 @@ class Command:
             return False, f" 文件./store/file/talk_{excutor_id}.txt不存在"
         except Exception as e:
             return False, f" 发送@消息失败: {e}"
+    
+    async def approve_other_join_group(self, websocket, message:dict) -> tuple[bool, str]:
+        """
+        审批其他人加入群
+        """
+
+        try:
+            user_id = message.get("user_id")
+            if message.get("post_type") == "request" and message.get("request_type") == "group":
+                if message.get("sub_type") == "add":
+                    flag = message.get("flag")
+                    approve = True
+                
+                    await QQAPI_list(websocket).set_group_add_request(flag, approve)
+                    return True, "已同意用户 {} 加入群聊".format(user_id)
+
+            return False, None #"已拒绝或忽略 用户{user_id}请求".format(user_id=user_id)
+        except Exception as e:
+            return False, f"审批其他人加入群出错: {str(e)}"
