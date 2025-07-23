@@ -33,12 +33,11 @@ for dir in "${BOT_DIRS[@]}"; do
         new_container_name="Bot_$counter"
         new_service_name="aurorabot_$counter"
         new_app_name="AuroraBot_$counter"
-        old_command1="添加文件1"
+        old_command1="添加文件"
         new_command1="添加文件$counter"
-        old_command2="更新头像1"
+        old_command2="更新头像"
         new_command2="更新头像$counter"
 
-        fi
         
         # 检查文件中是否包含需要替换的字符串
         if grep -q "$old_command1\|$old_command2" "$target_file"; then
