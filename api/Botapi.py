@@ -267,6 +267,7 @@ class QQAPI_list:
             await self.websocket.send(json.dumps(json_message))
             self.Logger.info(f"已设置群名片,群号:{group_id},用户id:{user_id},名片:{card}")
             # await asyncio.sleep(1.5)
+            return True
         except Exception as e:
             self.Logger.error(f"设置群名片失败: {e}")
-            raise
+            return False

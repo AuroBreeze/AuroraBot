@@ -18,7 +18,7 @@ class Command_API:
         self.api = Command()
     
     async def handle_command(self) -> tuple[bool, str]:
-
+        # 处理好友请求
         judge,msg_or_err = await self.api.approve_friend_add(self.message,self.websocket)
 
         group_id = str(self.message.get('group_id'))
@@ -114,6 +114,11 @@ class Command_API:
 
         # 退出所有非白名单群组
         judge,msg_or_err = await self.api.exit_non_whitelist_groups(self.message, self.websocket)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+
+        # 修改群名片
+        judge,msg_or_err = await self.api.set_group_card(self.message,self.websocket)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
 
@@ -870,5 +875,32 @@ class Command:
             self.logger.error(f"审批好友请求出错: {str(e)}")
             return False, f"审批好友请求出错: {str(e)}"
         
+    async def set_group_card(self, message:dict, websocket) -> tuple[bool, str]:
+        """
+        设置群名片
+        """
+        try:
+            raw_msg = str(message.get('raw_message'))
+            if not raw_msg.startswith('更改名字 '):
+                return False, None
+            
+            group_id = str(message.get('group_id'))
+            excutor_id = str(message.get('user_id'))
 
+            check_judge,check_msg = Auth().check_auth(group_id,excutor_id,2)
+            if not check_judge:
+                return False, None
+            
+            card_name = raw_msg.split()[1]
+            self_id = str(message.get('self_id'))
+            check_judge = await QQAPI_list(websocket).set_group_card(group_id,self_id ,card_name)
+
+            if check_judge:
+                return True, f" 改名成功，当前名字为: {card_name}"
+            else:
+                return False, f" 更改群名片出错: {check_msg}"
+        except Exception as e:
+            self.logger.error(f" 设置群名片出错: {str(e)}")
+            return False, f" 设置群名片出错: {str(e)}"
         
+    
