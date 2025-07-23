@@ -271,3 +271,27 @@ class QQAPI_list:
         except Exception as e:
             self.Logger.error(f"设置群名片失败: {e}")
             return False
+    
+    async def set_self_avatar(self, file_path: str):
+        """
+        设置自己的头像
+        """
+        try:
+            import base64
+            
+            with open(file_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            
+            json_message = {
+                "action": "set_qq_avatar",
+                "params": {
+                        "file": f"base64://{encoded_string}"
+                        }
+                    }
+            await self.websocket.send(json.dumps(json_message))
+            self.Logger.info(f"已设置自己的头像,头像路径:{file_path}")
+            # await asyncio.sleep(1.5)
+            return True
+        except Exception as e:
+            self.Logger.error(f"设置自己的头像失败: {e}")
+            return False

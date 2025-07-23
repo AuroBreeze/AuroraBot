@@ -121,6 +121,16 @@ class Command_API:
         judge,msg_or_err = await self.api.set_group_card(self.message,self.websocket)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            
+        # 等待头像上传
+        judge,msg_or_err = await self.api.wait_for_avatar(self.message)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            
+        # 设置头像
+        judge,msg_or_err = await self.api.set_avatar(self.message,self.websocket)
+        if msg_or_err is not None:
+            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
 
 class Command:
     """
@@ -164,6 +174,7 @@ class Command:
 17*.移除白名单群组 --> 移除白名单群组 <群号>/#delgroup <群号>
 18*.列出白名单群组: 列出白名单群组/#listgroups
 19*.退出非白名单群组: 退群/#exitgroups
+20*.设置头像 --> #avatar (先发送此命令，再发送图片)
 """
         return True, help_text
 
@@ -903,4 +914,82 @@ class Command:
             self.logger.error(f" 设置群名片出错: {str(e)}")
             return False, f" 设置群名片出错: {str(e)}"
         
-    
+    async def wait_for_avatar(self, message:dict) -> tuple[bool, str]:
+        """等待用户上传头像图片"""
+        raw_msg = str(message.get('raw_message'))
+        user_id = str(message.get('user_id'))
+        group_id = str(message.get('group_id'))
+
+        check_judge,check_msg = Auth().check_auth(group_id,user_id,3)
+        if not check_judge:
+            return False, check_msg
+        
+        if raw_msg != "#avatar":
+            return False, None
+            
+        from .. import proxy_cfg
+        proxy_cfg.waiting_for_avatar[user_id] = True
+        return True, "请发送需要设置为头像的图片"
+
+    async def set_avatar(self, message:dict, websocket) -> tuple[bool, str]:
+        """
+        设置头像
+        """
+        try:
+            if not message or not isinstance(message, dict):
+                return False, "无效的消息格式"
+
+            msg = message.get("message")
+            if not msg or not isinstance(msg, list):
+                return False, None
+            
+            url = msg[0].get("data", {}).get("url") if msg else None
+            if not url:
+                return False, None
+
+            group_id = str(message.get('group_id', ''))
+            excutor_id = str(message.get('user_id', ''))
+
+            check_judge, check_msg = Auth().check_auth(group_id, excutor_id, 3)
+            if not check_judge:
+                return False, check_msg
+
+            from .. import proxy_cfg
+            if excutor_id not in proxy_cfg.waiting_for_avatar or not proxy_cfg.waiting_for_avatar[excutor_id]:
+                return False, None
+            
+            proxy_cfg.waiting_for_avatar[excutor_id] = False
+            
+            import requests
+            from requests.exceptions import RequestException
+            import os
+            import tempfile
+            
+            try:
+                response = requests.get(url, timeout=20)
+                response.raise_for_status()
+                
+                # 创建临时文件保存图片
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                    tmp_file.write(response.content)
+                    tmp_path = tmp_file.name
+                
+                # 设置头像
+                check_judge = await QQAPI_list(websocket).set_self_avatar(tmp_path)
+                
+                # 删除临时文件
+                os.unlink(tmp_path)
+                
+                if check_judge:
+                    return True, "头像已更新"
+                return False, "设置头像失败"
+                
+            except RequestException as e:
+                self.logger.error(f"下载头像失败: {str(e)}")
+                return False, f"下载头像失败: {str(e)}"
+            except Exception as e:
+                self.logger.error(f"设置头像失败: {str(e)}")
+                return False, f"设置头像失败: {str(e)}"
+        except Exception as e:
+            self.logger.error(f"处理头像设置出错: {str(e)}")
+            return False, f"处理头像设置出错: {str(e)}"

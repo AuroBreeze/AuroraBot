@@ -18,6 +18,9 @@ group_name_tasks: Dict[str, asyncio.Task] = {}  # 群名修改任务 {group_id: 
 current_group_names: Dict[str, str] = {}  # 当前群名 {group_id: name}
 group_name_timers: Dict[str, float] = {}  # 群名修改计时 {group_id: 剩余秒数}
 
+waiting_for_file = {} 
+waiting_for_avatar = {}  # 新增等待头像状态字典
+
 def get_active_tasks() -> Dict[str, asyncio.Task]:
     global active_tasks
     return active_tasks
