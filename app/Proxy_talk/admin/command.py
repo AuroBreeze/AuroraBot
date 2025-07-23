@@ -18,8 +18,12 @@ class Command_API:
         self.api = Command()
     
     async def handle_command(self) -> tuple[bool, str]:
+
+        judge,msg_or_err = await self.api.approve_friend_add(self.message,self.websocket)
+
         group_id = str(self.message.get('group_id'))
         excutor_id = str(self.message.get('user_id'))
+
 
         check_judge,check_msg = Auth().check_msg(self.message)
         if not check_judge:
@@ -57,21 +61,6 @@ class Command_API:
         judge,msg_or_err = await self.api.set_group_name(self.message, self.websocket)
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
-            if judge and "群名修改已完成" in msg_or_err:
-                await QQAPI_list(self.websocket).send_group_message(group_id, msg_or_err)
-
-        judge,msg_or_err = await self.api.command_help(self.message)
-        if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
-            
-        judge,msg_or_err = await self.api.add_qq(self.message)
-        if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
-            
-        judge,msg_or_err = await self.api.del_qq(self.message)
-        if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
-            # 如果是任务完成消息，再发送一次普通消息
             if judge and "群名修改已完成" in msg_or_err:
                 await QQAPI_list(self.websocket).send_group_message(group_id, msg_or_err)
 
@@ -128,7 +117,6 @@ class Command_API:
         if msg_or_err is not None:
             await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
 
-
 class Command:
     """
     命令处理器
@@ -168,7 +156,7 @@ class Command:
 14*.清空文件: #cf/#clearfiles
 15*.清空词汇: #ct/#cleartexts
 16*.添加白名单群组 --> 添加白名单群组 <群号>/#addgroup <群号>
-17*.移除白名单群组 --> 删除白名单群组 <群号>/#delgroup <群号>
+17*.移除白名单群组 --> 移除白名单群组 <群号>/#delgroup <群号>
 18*.列出白名单群组: 列出白名单群组/#listgroups
 19*.退出非白名单群组: 退群/#exitgroups
 """
@@ -746,8 +734,8 @@ class Command:
         """添加白名单群组"""
         raw_msg = str(message.get('raw_message'))
         if not raw_msg.startswith('#addgroup '):
-            if raw_msg != "添加白名单群组 ":
-             return False, None
+            if not raw_msg.startswith("添加白名单群组 "):
+                return False, None
             
         group_id = str(message.get('group_id'))
         excutor_id = str(message.get('user_id'))
@@ -773,7 +761,7 @@ class Command:
         """移除白名单群组"""
         raw_msg = str(message.get('raw_message'))
         if not raw_msg.startswith('#delgroup '):
-            if raw_msg != "移除白名单群组 ":
+            if not raw_msg.startswith("移除白名单群组 "):
                 return False, None
             
         group_id = str(message.get('group_id'))
@@ -800,7 +788,7 @@ class Command:
         """列出所有白名单群组"""
         raw_msg = str(message.get('raw_message'))
         if raw_msg != '#listgroups':
-            if raw_msg != "列出白名单群组 ":
+            if raw_msg != "列出白名单群组":
                 return False, None
             
         group_id = str(message.get('group_id'))
@@ -863,3 +851,24 @@ class Command:
             return False, None
         
         return True, " 主人我在"
+    
+    async def approve_friend_add(self, message:dict, websocket) -> tuple[bool, str]:
+        """
+        审批好友请求
+        """
+        try:
+            user_id = message.get("user_id")
+            if message.get("post_type") == "request" and message.get("request_type") == "friend":
+                
+                flag = message.get("flag")
+                approve = True
+                await QQAPI_list(websocket).set_friend_add_request(flag, approve)
+                return True, "已同意用户 {} 成为好友".format(user_id)
+
+            return False, None #"已拒绝或忽略 用户{user_id}请求".format(user_id=user_id)
+        except Exception as e:
+            self.logger.error(f"审批好友请求出错: {str(e)}")
+            return False, f"审批好友请求出错: {str(e)}"
+        
+
+        

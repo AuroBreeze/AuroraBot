@@ -230,3 +230,43 @@ class QQAPI_list:
         except Exception as e:
             self.Logger.error(f"退出群聊失败: {e}")
             raise
+    
+    async def set_friend_add_request(self, flag: str, approve: bool = True, remark: str = ""):
+        """
+        处理加好友请求
+        """
+        try:
+            json_message = {
+                "action": "set_friend_add_request",
+                "params": {
+                        "flag": str(flag),
+                        "approve": approve,
+                        "remark": str(remark)
+                        }
+                    }
+            await self.websocket.send(json.dumps(json_message))
+            self.Logger.info(f"已处理加好友请求,flag:{flag},approve:{approve},remark:{remark}")
+            # await asyncio.sleep(1.5)
+        except Exception as e:
+            self.Logger.error(f"处理加好友请求失败: {e}")
+            raise
+
+    async def set_group_card(self, group_id: str, user_id: str, card: str = ""):
+        """
+        设置群名片
+        """
+        try:
+            json_message = {
+                "action": "set_group_card",
+                "params": {
+                        "group_id": str(group_id),
+                        "user_id": str(user_id),
+                        "card": str(card)
+                        }
+                    }
+            await self.websocket.send(json.dumps(json_message))
+            self.Logger.info(f"已设置群名片,群号:{group_id},用户id:{user_id},名片:{card}")
+            # await asyncio.sleep(1.5)
+        except Exception as e:
+            self.Logger.error(f"设置群名片失败: {e}")
+            raise
