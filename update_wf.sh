@@ -41,8 +41,9 @@ modify_docker_compose() {
     local container_name="$2"
     local service_name="$3"
     local app_name="$4"
+    local port="$5"
     
-    if grep -q "$container_name\|$service_name\|$app_name" "$file"; then
+    if grep -q "$container_name\|$service_name\|$app_name" "$file" && grep -q "${port}:6099" "$file"; then
         echo "docker-compose.yml已包含新配置，跳过修改"
         return 1
     fi
@@ -52,9 +53,10 @@ modify_docker_compose() {
     sed -i "s/aurorabot:/"$service_name:"/" "$file"
     sed -i "s/container_name: AuroraBot/container_name: $app_name/" "$file"
     sed -i "s/- aurorabot/- $service_name/" "$file"
+    sed -i "s/- 6099:6099/- ${port}:6099/" "$file"
     
-    if grep -q "$container_name\|$service_name\|$app_name" "$file"; then
-        echo "成功修改docker-compose.yml: $container_name、$service_name 和 $app_name"
+    if grep -q "$container_name\|$service_name\|$app_name" "$file" && grep -q "${port}:6099" "$file"; then
+        echo "成功修改docker-compose.yml: $container_name、$service_name、$app_name 和端口 $port"
         return 0
     else
         echo "docker-compose.yml修改失败: $file"
@@ -147,7 +149,11 @@ modify_configs() {
 
     # 修改docker-compose.yml
     if [[ -f "$docker_file" ]]; then
-        modify_docker_compose "$docker_file" "$new_container_name" "$new_service_name" "$new_app_name"
+        local port=$((6069 + counter))  # 第一个是6099(例外)，第二个6070，第三个6071...
+        if [[ $counter -eq 1 ]]; then
+            port=6099  # 第一个文件夹保持6099不变
+        fi
+        modify_docker_compose "$docker_file" "$new_container_name" "$new_service_name" "$new_app_name" "$port"
         case $? in
             0) 
                 # 修改prod.py
