@@ -11,21 +11,56 @@ modify_command_py() {
     local old_cmd2="$4"
     local new_cmd2="$5"
     
-    if grep -q "$new_cmd1\|$new_cmd2" "$file"; then
-        echo "command.py已包含新命令，跳过修改: $new_cmd1 和 $new_cmd2"
+    # 单独检查每个新命令是否已存在
+    if grep -q "$new_cmd1" "$file"; then
+        echo "command.py已包含新命令: $new_cmd1"
+        return 1
+    fi
+    if grep -q "$new_cmd2" "$file"; then
+        echo "command.py已包含新命令: $new_cmd2"
         return 1
     fi
     
-    if grep -q "$old_cmd1\|$old_cmd2" "$file"; then
+    # 单独检查每个旧命令是否存在
+    local old_cmd1_found=0
+    local old_cmd2_found=0
+    if grep -q "$old_cmd1" "$file"; then
+        old_cmd1_found=1
+    fi
+    if grep -q "$old_cmd2" "$file"; then
+        old_cmd2_found=1
+    fi
+    
+    if [[ $old_cmd1_found -eq 1 || $old_cmd2_found -eq 1 ]]; then
         cp "$file" "$file.bak"
-        sed -i "s/$old_cmd1/$new_cmd1/g" "$file"
-        sed -i "s/$old_cmd2/$new_cmd2/g" "$file"
+        if [[ $old_cmd1_found -eq 1 ]]; then
+            sed -i "s/$old_cmd1/$new_cmd1/g" "$file"
+        fi
+        if [[ $old_cmd2_found -eq 1 ]]; then
+            sed -i "s/$old_cmd2/$new_cmd2/g" "$file"
+        fi
         
-        if grep -q "$new_cmd1\|$new_cmd2" "$file"; then
-            echo "成功修改command.py: $file -> $new_cmd1 和 $new_cmd2"
+        # 单独验证每个新命令
+        local success=1
+        if [[ $old_cmd1_found -eq 1 ]] && ! grep -q "$new_cmd1" "$file"; then
+            echo "command.py修改失败: 未找到 $new_cmd1"
+            success=0
+        fi
+        if [[ $old_cmd2_found -eq 1 ]] && ! grep -q "$new_cmd2" "$file"; then
+            echo "command.py修改失败: 未找到 $new_cmd2"
+            success=0
+        fi
+        
+        if [[ $success -eq 1 ]]; then
+            echo "成功修改command.py: $file"
+            if [[ $old_cmd1_found -eq 1 ]]; then
+                echo "- 替换: $old_cmd1 -> $new_cmd1"
+            fi
+            if [[ $old_cmd2_found -eq 1 ]]; then
+                echo "- 替换: $old_cmd2 -> $new_cmd2"
+            fi
             return 0
         else
-            echo "command.py修改失败: $file"
             mv "$file.bak" "$file"
             return 2
         fi
@@ -93,6 +128,9 @@ create_version_file() {
     local dir="$1"
     local counter="$2"
     local version_file="$dir/${counter}.version"
+    
+    # 先删除已有的version文件
+    remove_version_file "$dir"
     
     echo "$counter" > "$version_file"
     if [[ -f "$version_file" ]]; then
@@ -201,8 +239,8 @@ modify_configs() {
     local new_app_name="AuroraBot_$counter"
     local old_command1="添加文件1"
     local new_command1="添加文件$counter"
-    local old_command2="更新头像"
-    local new_command2="更新头像$counter"
+    local old_command2="更换头像"
+    local new_command2="更换头像$counter"
 
     # 修改command.py
     if [[ -f "$target_file" ]]; then
@@ -245,13 +283,6 @@ modify_configs() {
         ((fail_count++))
     fi
 
-    # 创建version文件
-    create_version_file "$dir" "$counter"
-    case $? in
-        0) ((success_count++)) ;;
-        1) ((fail_count++)) ;;
-    esac
-
     return $((success_count + fail_count))
 }
 
@@ -287,8 +318,11 @@ restore_configs() {
 # 显示帮助信息
 show_help() {
     echo "使用方法:"
-    echo "  ./update_wf.sh --modify    执行配置修改"
-    echo "  ./update_wf.sh --restore   执行配置还原"
+    echo "  ./update_wf.sh --modify        执行配置修改"
+    echo "  ./update_wf.sh --restore       执行配置还原"
+    echo "  ./update_wf.sh --create-version [目录|--all] [版本号]  创建version文件"
+    echo "  ./update_wf.sh --remove-version [目录|--all]          删除version文件"
+    echo "  ./update_wf.sh --update-port [目录] [新端口号]        更新文件夹端口"
     echo ""
     echo "功能说明:"
     echo "  批量修改/还原QQbot配置文件"
@@ -308,6 +342,47 @@ case "$1" in
         done
         echo "还原操作完成"
         exit 0
+        ;;
+    "--create-version")
+        if [[ -z "$2" || -z "$3" ]]; then
+            echo "错误: 需要提供目录路径/--all和版本号"
+            show_help
+            exit 1
+        fi
+        if [[ "$2" == "--all" ]]; then
+            BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+            for dir in "${BOT_DIRS[@]}"; do
+                create_version_file "$dir" "$3"
+            done
+        else
+            create_version_file "$2" "$3"
+        fi
+        exit $?
+        ;;
+    "--remove-version")
+        if [[ -z "$2" ]]; then
+            echo "错误: 需要提供目录路径或--all"
+            show_help
+            exit 1
+        fi
+        if [[ "$2" == "--all" ]]; then
+            BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+            for dir in "${BOT_DIRS[@]}"; do
+                remove_version_file "$dir"
+            done
+        else
+            remove_version_file "$2"
+        fi
+        exit $?
+        ;;
+    "--update-port")
+        if [[ -z "$2" || -z "$3" ]]; then
+            echo "错误: 需要提供目录路径和新端口号"
+            show_help
+            exit 1
+        fi
+        rename_dir_with_port "$2" "$3"
+        exit $?
         ;;
     *)
         show_help
@@ -337,4 +412,4 @@ for dir in "${BOT_DIRS[@]}"; do
     ((counter++))
 done
 
-echo "处理完成! 成功: $success_count, 失败: $fail_count"
+    echo "配置修改完成! 成功: $success_count, 失败: $fail_count"
