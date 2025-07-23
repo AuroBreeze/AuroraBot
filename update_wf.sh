@@ -129,8 +129,8 @@ create_version_file() {
     local counter="$2"
     local version_file="$dir/${counter}.version"
     
-    # 先删除已有的version文件
-    remove_version_file "$dir"
+    # 确保完全删除所有.version文件
+    find "$dir" -maxdepth 1 -name "*.version" -type f -delete
     
     echo "$counter" > "$version_file"
     if [[ -f "$version_file" ]]; then
@@ -145,12 +145,9 @@ create_version_file() {
 # 删除version文件函数
 remove_version_file() {
     local dir="$1"
-    local version_file="$dir"/*.version
-    
-    if ls $version_file 1> /dev/null 2>&1; then
-        rm -f $version_file
-        echo "已删除version文件: $version_file"
-    fi
+    # 使用find命令确保删除所有.version文件
+    find "$dir" -maxdepth 1 -name "*.version" -type f -delete
+    echo "已删除目录 $dir 下的所有.version文件"
 }
 
 # 从文件夹名提取端口号
@@ -320,9 +317,9 @@ show_help() {
     echo "使用方法:"
     echo "  ./update_wf.sh --modify        执行配置修改"
     echo "  ./update_wf.sh --restore       执行配置还原"
-    echo "  ./update_wf.sh --create-version [目录|--all] [版本号]  创建version文件"
-    echo "  ./update_wf.sh --remove-version [目录|--all]          删除version文件"
-    echo "  ./update_wf.sh --update-port [目录] [新端口号]        更新文件夹端口"
+    echo "  ./update_wf.sh --create-version        为所有QQbot文件夹创建version文件"
+    echo "  ./update_wf.sh --remove-version        删除所有QQbot文件夹的version文件"
+    echo "  ./update_wf.sh --update-port        自动更新所有QQbot文件夹端口号"
     echo ""
     echo "功能说明:"
     echo "  批量修改/还原QQbot配置文件"
@@ -344,45 +341,52 @@ case "$1" in
         exit 0
         ;;
     "--create-version")
-        if [[ -z "$2" || -z "$3" ]]; then
-            echo "错误: 需要提供目录路径/--all和版本号"
-            show_help
+        echo "开始为所有QQbot文件夹创建version文件..."
+        BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+        if [ ${#BOT_DIRS[@]} -eq 0 ]; then
+            echo "未找到任何 QQbot_* 目录"
             exit 1
         fi
-        if [[ "$2" == "--all" ]]; then
-            BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
-            for dir in "${BOT_DIRS[@]}"; do
-                create_version_file "$dir" "$3"
-            done
-        else
-            create_version_file "$2" "$3"
-        fi
-        exit $?
+        
+        for dir in "${BOT_DIRS[@]}"; do
+            create_version_file "$dir" "1"
+        done
+        echo "version文件创建完成"
+        exit 0
         ;;
     "--remove-version")
-        if [[ -z "$2" ]]; then
-            echo "错误: 需要提供目录路径或--all"
-            show_help
+        echo "开始删除所有QQbot文件夹的version文件..."
+        BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+        if [ ${#BOT_DIRS[@]} -eq 0 ]; then
+            echo "未找到任何 QQbot_* 目录"
             exit 1
         fi
-        if [[ "$2" == "--all" ]]; then
-            BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
-            for dir in "${BOT_DIRS[@]}"; do
-                remove_version_file "$dir"
-            done
-        else
-            remove_version_file "$2"
-        fi
-        exit $?
+        
+        for dir in "${BOT_DIRS[@]}"; do
+            remove_version_file "$dir"
+        done
+        echo "version文件删除完成"
+        exit 0
         ;;
     "--update-port")
-        if [[ -z "$2" || -z "$3" ]]; then
-            echo "错误: 需要提供目录路径和新端口号"
-            show_help
+        echo "开始自动更新所有QQbot文件夹端口号..."
+        BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+        if [ ${#BOT_DIRS[@]} -eq 0 ]; then
+            echo "未找到任何 QQbot_* 目录"
             exit 1
         fi
-        rename_dir_with_port "$2" "$3"
-        exit $?
+        
+        counter=1
+        for dir in "${BOT_DIRS[@]}"; do
+            port=$((6069 + counter))
+            if [[ $counter -eq 1 ]]; then
+                port=6099
+            fi
+            rename_dir_with_port "$dir" "$port"
+            ((counter++))
+        done
+        echo "端口号更新完成"
+        exit 0
         ;;
     *)
         show_help
