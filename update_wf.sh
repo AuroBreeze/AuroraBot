@@ -54,6 +54,7 @@ for dir in "${BOT_DIRS[@]}"; do
                 sed -i "s/container_name: Bot/container_name: $new_container_name/" "$docker_file"
                 sed -i "s/aurorabot:/"$new_service_name:"/" "$docker_file"
                 sed -i "s/container_name: AuroraBot/container_name: $new_app_name/" "$docker_file"
+                sed -i "s/- aurorabot/- $new_service_name/" "$docker_file"
                 
                 # 检查替换结果
                 if grep -q "$new_container_name\|$new_service_name\|$new_app_name" "$docker_file"; then
