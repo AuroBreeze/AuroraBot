@@ -222,8 +222,9 @@ class Command:
                     try:
                         url = item['data']['url']
                         filename = item['data']['file']
-                        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                        save_path = f'./store/file/images/{timestamp}_{filename}'
+                        stamp = 1
+                        stamp+=1
+                        save_path = f'./store/file/images/{stamp}'
                         
                         # 下载图片并转换为base64
                         response = requests.get(url, timeout=10)
@@ -246,13 +247,14 @@ class Command:
                         continue
             
             if combined_msg:
+                combined_msg_copy = combined_msg.copy()
                 from .. import proxy_cfg
                 proxy_cfg.add_text = combined_msg
                 self.logger.info(f"添加组合消息(保留顺序),群号:{group_id},执行者:{excutor_id}")
 
-                combined_msg.append({"type": "text", "data": {"text": "\n添加成功"}})
+                combined_msg_copy.append({"type": "text", "data": {"text": "\n添加成功"}})
 
-                return True, combined_msg
+                return True, combined_msg_copy
         
         return False, None
     async def send_message(self, message:dict, websocket, group_id=None):
@@ -288,7 +290,7 @@ class Command:
                         check_judge, check_msg = Auth().check_cfg()
                         if not check_judge:
                             return False, check_msg
-                        await QQAPI_list(websocket).send_group_message(group_id, add_text)
+                        await QQAPI_list(websocket).send_group_message_array(group_id, add_text)
                         await asyncio.sleep(int(time_interval) / 1000)
                 except asyncio.CancelledError:
                     self.logger.info(f"群组{group_id}的发送任务已取消")
