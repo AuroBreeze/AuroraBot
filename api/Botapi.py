@@ -295,3 +295,96 @@ class QQAPI_list:
         except Exception as e:
             self.Logger.error(f"设置自己的头像失败: {e}")
             return False
+    async def send_group_img(self, group_id: str, file_path: str) -> bool:
+        """
+        发送群图片
+        """
+        try:
+            import base64
+            with open(file_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+
+            json_message = {
+                "action": "send_group_msg",
+                "params": {
+                    "group_id": str(group_id),
+                    "message": [{
+                        "type": "image",
+                        "data": {
+                            "file": f"base64://{encoded_string}",
+                            "summary": "[图片]"
+                        }
+                    }]
+                }
+            }
+            await self.websocket.send(json.dumps(json_message))
+            self.Logger.info(f"已发送群图片,群号:{group_id},图片路径:{file_path}")
+            # await asyncio.sleep(1.5)
+            return True
+        except Exception as e:
+            self.Logger.error(f"发送群图片失败: {e}")
+            return False
+
+    async def send_group_message_array(self, group_id: str, message_array: list) -> bool:
+        """
+        发送群消息数组(包含图片和文本)
+        会自动下载图片并使用base64编码发送
+        
+        :param group_id: 群号
+        :param message_array: 消息数组，格式如:
+            [
+                {
+                    "type": "image",
+                    "data": {
+                        "url": "https://...",
+                        "file": "xxx.jpg"
+                    }
+                },
+                {
+                    "type": "text",
+                    "data": {
+                        "text": "xxx"
+                    }
+                }
+            ]
+        :return: 是否成功
+        """
+        try:
+            import requests
+            import base64
+            
+            processed_messages = []
+            
+            for msg in message_array:
+                if msg["type"] == "image":
+                    # 下载图片并base64编码
+                    response = requests.get(msg["data"]["url"])
+                    encoded_string = base64.b64encode(response.content).decode('utf-8')
+                    
+                    # 替换为base64图片消息
+                    processed_messages.append({
+                        "type": "image",
+                        "data": {
+                            "file": f"base64://{encoded_string}",
+                            "summary": "[图片]"
+                        }
+                    })
+                else:
+                    # 其他类型消息直接添加
+                    processed_messages.append(msg)
+            
+            # 发送处理后的消息
+            json_message = {
+                "action": "send_group_msg",
+                "params": {
+                    "group_id": str(group_id),
+                    "message": processed_messages
+                }
+            }
+            await self.websocket.send(json.dumps(json_message))
+            self.Logger.info(f"已发送群消息数组,群号:{group_id},消息长度:{len(processed_messages)}")
+            return True
+            
+        except Exception as e:
+            self.Logger.error(f"发送群消息数组失败: {e}")
+            return False
