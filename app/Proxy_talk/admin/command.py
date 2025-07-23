@@ -293,8 +293,6 @@ class Command:
 
     async def wait_for_file(self, message:dict) -> tuple[bool, str]:
         """等待用户发送文件"""
-
-
         raw_msg = str(message.get('raw_message'))
         user_id = str(message.get('user_id'))
         group_id = str(message.get('group_id'))
@@ -307,7 +305,12 @@ class Command:
             return False, None
             
         from .. import proxy_cfg
+        # 检查是否已经在等待头像
+        if proxy_cfg.waiting_for_avatar.get(user_id, False):
+            return False, "您当前正在等待设置头像，请先完成或取消该操作"
+            
         proxy_cfg.waiting_for_file[user_id] = True
+        proxy_cfg.waiting_for_avatar.pop(user_id, None)  # 确保取消任何等待头像状态
         return True, "请发送需要下载的文件"
 
     async def download_file(self, message:dict) -> tuple[bool, str]:
@@ -332,10 +335,15 @@ class Command:
                 return False, check_msg
 
             from .. import proxy_cfg
+            # 检查是否是发起命令的用户
             if excutor_id not in proxy_cfg.waiting_for_file or not proxy_cfg.waiting_for_file[excutor_id]:
                 return False, None
             
+            # 清除等待状态
             proxy_cfg.waiting_for_file[excutor_id] = False
+            # 确保只有发起者可以上传
+            if str(message.get('user_id')) != excutor_id:
+                return False, "只有发起命令的用户可以上传文件"
             
             import requests
             from requests.exceptions import RequestException
@@ -928,7 +936,12 @@ class Command:
             return False, None
             
         from .. import proxy_cfg
+        # 检查是否已经在等待文件
+        if proxy_cfg.waiting_for_file.get(user_id, False):
+            return False, "您当前正在等待上传文件，请先完成或取消该操作"
+            
         proxy_cfg.waiting_for_avatar[user_id] = True
+        proxy_cfg.waiting_for_file.pop(user_id, None)  # 确保取消任何等待文件状态
         return True, "请发送需要设置为头像的图片"
 
     async def set_avatar(self, message:dict, websocket) -> tuple[bool, str]:
@@ -955,10 +968,15 @@ class Command:
                 return False, check_msg
 
             from .. import proxy_cfg
+            # 检查是否是发起命令的用户
             if excutor_id not in proxy_cfg.waiting_for_avatar or not proxy_cfg.waiting_for_avatar[excutor_id]:
                 return False, None
             
+            # 清除等待状态
             proxy_cfg.waiting_for_avatar[excutor_id] = False
+            # 确保只有发起者可以上传
+            if str(message.get('user_id')) != excutor_id:
+                return False, "只有发起命令的用户可以上传头像"
             
             import requests
             from requests.exceptions import RequestException
