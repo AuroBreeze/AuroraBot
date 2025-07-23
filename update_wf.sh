@@ -115,12 +115,82 @@ remove_version_file() {
     fi
 }
 
+# 从文件夹名提取端口号
+extract_port_from_dir() {
+    local dir="$1"
+    local port=$(basename "$dir" | grep -oE '[0-9]{4}$')
+    echo "${port:-0}"
+}
+
+# 重命名文件夹以更新端口号
+rename_dir_with_port() {
+    local dir="$1"
+    local new_port="$2"
+    local parent_dir=$(dirname "$dir")
+    local dir_name=$(basename "$dir")
+    local new_dir="${parent_dir}/${dir_name%_*}_${new_port}"
+    
+    if [[ "$dir" != "$new_dir" ]]; then
+        mv "$dir" "$new_dir"
+        echo "已将文件夹重命名为: $(basename "$new_dir")"
+        echo "$new_dir"  # 返回新路径
+    else
+        echo "$dir"  # 返回原路径
+    fi
+}
+
+# 检查文件夹是否需要修改
+need_modify() {
+    local dir="$1"
+    local counter="$2"
+    
+    # 计算正确端口号
+    local correct_port=$((6069 + counter))
+    if [[ $counter -eq 1 ]]; then
+        correct_port=6099
+    fi
+    
+    # 检查端口号
+    local current_port=$(extract_port_from_dir "$dir")
+    if [[ "$current_port" != "$correct_port" ]]; then
+        return 0  # 需要修改
+    fi
+    
+    # 检查配置文件是否已修改
+    local target_file="$dir/app/Proxy_talk/admin/command.py"
+    local new_command="添加文件$counter"
+    if grep -q "$new_command" "$target_file"; then
+        return 1  # 已修改，跳过
+    fi
+    
+    return 0  # 需要修改
+}
+
 # 修改配置主函数
 modify_configs() {
     local dir="$1"
     local counter="$2"
     local success_count="$3"
     local fail_count="$4"
+
+    # 先检查是否需要修改
+    if ! need_modify "$dir" "$counter"; then
+        echo "文件夹已正确配置，跳过: $(basename "$dir")"
+        return 0
+    fi
+
+    # 计算正确端口号
+    local correct_port=$((6069 + counter))
+    if [[ $counter -eq 1 ]]; then
+        correct_port=6099
+    fi
+    
+    # 检查并更新文件夹端口号
+    local current_port=$(extract_port_from_dir "$dir")
+    if [[ "$current_port" != "$correct_port" ]]; then
+        echo "检测到端口不匹配: 当前${current_port}, 应为${correct_port}"
+        dir=$(rename_dir_with_port "$dir" "$correct_port")
+    fi
 
     local target_file="$dir/app/Proxy_talk/admin/command.py"
     local docker_file="$dir/docker-compose.yml"
@@ -262,6 +332,7 @@ echo "开始处理 ${#BOT_DIRS[@]} 个目录..."
 
 # 遍历所有找到的 QQbot 文件夹
 for dir in "${BOT_DIRS[@]}"; do
+    echo "正在检查: $(basename "$dir")"
     modify_configs "$dir" "$counter" "$success_count" "$fail_count"
     ((counter++))
 done
