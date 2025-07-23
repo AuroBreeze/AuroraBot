@@ -28,11 +28,10 @@ class Command_API:
         check_judge,check_msg = Auth().check_msg(self.message)
         if not check_judge:
             return False, check_msg
-
-        # 处理命令
+        
         judge,msg_or_err = await self.api.add_text(self.message)
         if msg_or_err is not None:
-            await QQAPI_list(self.websocket).send_at_group_message(group_id,excutor_id,msg_or_err)
+            await QQAPI_list(self.websocket).send_group_message_array(group_id,msg_or_err)
         
         judge,msg_or_err = await self.api.send_message(self.message,self.websocket,group_id)
         if msg_or_err is not None:
@@ -206,8 +205,8 @@ class Command:
             # 创建存储目录
             os.makedirs('./store/file/images', exist_ok=True)
             
-            
-            if message["message"][0]["data"]["text"][:4] == '添加词汇 ':
+            print(message["message"][0]["data"]["text"][:4])
+            if str(message["message"][0]["data"]["text"][:3]) == '添加词汇':
                 message["message"][0]["data"]["text"] = message["message"][0]["data"]["text"][5:]
             
             combined_msg = []

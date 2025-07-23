@@ -1,0 +1,40 @@
+{
+    "self_id": 3552638520,
+    "user_id": 1732373074,
+    "time": 1753249705,
+    "message_id": 1628325937,
+    "message_seq": 1628325937,
+    "real_id": 1628325937,
+    "real_seq": "2049",
+    "message_type": "group",
+    "sender": {
+        "user_id": 1732373074,
+        "nickname": "AuroBreeze",
+        "card": "",
+        "role": "owner"
+    },
+    "raw_message": "[CQ:image,file=71FF731366789621EC16353278C021E8.jpg,sub_type=0,url=https://multimedia.nt.qq.com.cn/download?appid=1407&amp;fileid=EhS4JK1ub-7yVaymj2ZQVprW5LZDeBie5gEg_woomb_YjqTSjgMyBHByb2RQgL2jAVoQswrePOqaohuPvvPU-tkSgnoCELE&amp;rkey=CAQSMHmDMLy31DBdR6gghuqNZlQX0srd2jQdzu0DE87IqHEj7H61RnHtyEgM5G2qDEk45g,file_size=29470]123123123",
+    "font": 14,
+    "sub_type": "normal",
+    "message": [
+        {
+            "type": "image",
+            "data": {
+                "summary": "",
+                "file": "71FF731366789621EC16353278C021E8.jpg",
+                "sub_type": 0,
+                "url": "https://multimedia.nt.qq.com.cn/download?appid=1407&fileid=EhS4JK1ub-7yVaymj2ZQVprW5LZDeBie5gEg_woomb_YjqTSjgMyBHByb2RQgL2jAVoQswrePOqaohuPvvPU-tkSgnoCELE&rkey=CAQSMHmDMLy31DBdR6gghuqNZlQX0srd2jQdzu0DE87IqHEj7H61RnHtyEgM5G2qDEk45g",
+                "file_size": "29470"
+            }
+        },
+        {
+            "type": "text",
+            "data": {
+                "text": "123123123"
+            }
+        }
+    ],
+    "message_format": "array",
+    "post_type": "message",
+    "group_id": 849175076
+}
