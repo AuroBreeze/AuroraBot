@@ -33,7 +33,7 @@ for dir in "${BOT_DIRS[@]}"; do
         new_container_name="Bot_$counter"
         new_service_name="aurorabot_$counter"
         new_app_name="AuroraBot_$counter"
-        old_command1="添加文件"
+        old_command1="添加文件1"
         new_command1="添加文件$counter"
         old_command2="更新头像"
         new_command2="更新头像$counter"
@@ -45,28 +45,43 @@ for dir in "${BOT_DIRS[@]}"; do
             sed -i "s/$old_command1/$new_command1/g" "$target_file"
             sed -i "s/$old_command2/$new_command2/g" "$target_file"
             
-            # 检查docker-compose.yml是否存在
-            if [[ -f "$docker_file" ]]; then
-                # 备份docker-compose.yml
-                cp "$docker_file" "$docker_file.bak"
-                
-                # 替换服务名称和容器名称
-                sed -i "s/container_name: Bot/container_name: $new_container_name/" "$docker_file"
-                sed -i "s/aurorabot:/"$new_service_name:"/" "$docker_file"
-                sed -i "s/container_name: AuroraBot/container_name: $new_app_name/" "$docker_file"
-                sed -i "s/- aurorabot/- $new_service_name/" "$docker_file"
-                
-                # 检查替换结果
-                if grep -q "$new_container_name\|$new_service_name\|$new_app_name" "$docker_file"; then
-                    echo "成功修改docker-compose.yml: $new_container_name、$new_service_name 和 $new_app_name"
+                # 检查docker-compose.yml是否存在
+                if [[ -f "$docker_file" ]]; then
+                    # 备份docker-compose.yml
+                    cp "$docker_file" "$docker_file.bak"
+                    
+                    # 替换服务名称和容器名称
+                    sed -i "s/container_name: Bot/container_name: $new_container_name/" "$docker_file"
+                    sed -i "s/aurorabot:/"$new_service_name:"/" "$docker_file"
+                    sed -i "s/container_name: AuroraBot/container_name: $new_app_name/" "$docker_file"
+                    sed -i "s/- aurorabot/- $new_service_name/" "$docker_file"
+                    
+                    # 检查替换结果
+                    if grep -q "$new_container_name\|$new_service_name\|$new_app_name" "$docker_file"; then
+                        echo "成功修改docker-compose.yml: $new_container_name、$new_service_name 和 $new_app_name"
+                        
+                        # 修改prod.py中的WS_URL
+                        prod_file="$dir/config/environment/prod.py"
+                        if [[ -f "$prod_file" ]]; then
+                            cp "$prod_file" "$prod_file.bak"
+                            sed -i "s/aurorabot:/$new_service_name:/" "$prod_file"
+                            if grep -q "$new_service_name" "$prod_file"; then
+                                echo "成功修改prod.py中的WS_URL: $new_service_name"
+                            else
+                                echo "prod.py修改失败: $prod_file"
+                                mv "$prod_file.bak" "$prod_file"
+                            fi
+                        else
+                            echo "prod.py不存在: $prod_file"
+                        fi
+                    else
+                        echo "docker-compose.yml修改失败: $docker_file"
+                        # 恢复备份文件
+                        mv "$docker_file.bak" "$docker_file"
+                    fi
                 else
-                    echo "docker-compose.yml修改失败: $docker_file"
-                    # 恢复备份文件
-                    mv "$docker_file.bak" "$docker_file"
+                    echo "docker-compose.yml不存在: $docker_file"
                 fi
-            else
-                echo "docker-compose.yml不存在: $docker_file"
-            fi
             
             # 检查替换结果
             if grep -q "$new_command1\|$new_command2" "$target_file"; then
