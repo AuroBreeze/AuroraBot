@@ -178,37 +178,82 @@ class Command:
 """
         return True, help_text
 
-    async def add_text(self,message:dict) -> tuple[bool, str]:
+    async def add_text(self, message:dict) -> tuple[bool, str]:
         """
-        添加词汇
+        添加词汇和图片，保留原始顺序
         """
-
         raw_msg = str(message.get('raw_message'))
-        if not raw_msg.startswith('添加词汇 '): # 添加词汇 <词汇>
-            if not raw_msg.startswith('#adt '): # #adt <词汇>
-                return False, None
-            else:
-                word = raw_msg[4:]
-        else:
-            word = raw_msg[4:]
-            
         group_id = str(message.get('group_id'))
         excutor_id = str(message.get('user_id'))
-            
-        check_judge,check_msg = Auth().check_auth(group_id,excutor_id,3) # 检查权限
-        if not check_judge: # 权限不足
+        
+        # 检查权限
+        check_judge, check_msg = Auth().check_auth(group_id, excutor_id, 3)
+        if not check_judge:
             return False, check_msg
-        
-        if not raw_msg: # 没有输入词汇
-            return False, ' 消息内容为空'
-        
-        from .. import proxy_cfg
-        
-        proxy_cfg.add_text = word
-        #print(add_text)
 
-        self.logger.info(f"添加词汇:{word},群号:{group_id},执行者:{excutor_id}")
-        return True, f" 添加成功，词汇为{word}"
+        # 处理文本命令
+        if raw_msg.startswith('添加词汇 ') or raw_msg.startswith('#adt '):
+            pass
+        else:
+            return False, None
+
+        # 处理混合消息
+        if 'message' in message and isinstance(message['message'], list):
+            import os
+            import requests
+            from datetime import datetime
+            
+            # 创建存储目录
+            os.makedirs('./store/file/images', exist_ok=True)
+            
+            
+            if message["message"][0]["data"]["text"][:4] == '添加词汇 ':
+                message["message"][0]["data"]["text"] = message["message"][0]["data"]["text"][5:]
+            
+            combined_msg = []
+            for item in message['message']:
+                if item['type'] == 'text':
+                    text = item['data']['text'].strip()
+                    if text:
+                        combined_msg.append({
+                            'type': 'text',
+                            'data': {'text': text},
+                        })
+                elif item['type'] == 'image':
+                    try:
+                        url = item['data']['url']
+                        filename = item['data']['file']
+                        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                        save_path = f'./store/file/images/{timestamp}_{filename}'
+                        
+                        # 下载图片并转换为base64
+                        response = requests.get(url, timeout=10)
+                        with open(save_path, 'wb') as f:
+                            f.write(response.content)
+                        
+                        import base64
+                        with open(save_path, 'rb') as img_file:
+                            base64_data = base64.b64encode(img_file.read()).decode('utf-8')
+                            
+                        combined_msg.append({
+                            'type': 'image',
+                            'data': {
+                                    "file": f"base64://{base64_data}",
+                                    "summary": "[图片]"
+                            }
+                        })
+                    except Exception as e:
+                        self.logger.error(f"下载图片失败: {str(e)}")
+                        continue
+            print(combined_msg)
+            
+            if combined_msg:
+                from .. import proxy_cfg
+                proxy_cfg.add_text = combined_msg
+                self.logger.info(f"添加组合消息(保留顺序),群号:{group_id},执行者:{excutor_id}")
+                return True, combined_msg
+        
+        return False, None
     async def send_message(self, message:dict, websocket, group_id=None):
         """发送消息命令"""
         try:

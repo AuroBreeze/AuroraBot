@@ -350,39 +350,17 @@ class QQAPI_list:
         :return: 是否成功
         """
         try:
-            import requests
-            import base64
-            
-            processed_messages = []
-            
-            for msg in message_array:
-                if msg["type"] == "image":
-                    # 下载图片并base64编码
-                    response = requests.get(msg["data"]["url"])
-                    encoded_string = base64.b64encode(response.content).decode('utf-8')
-                    
-                    # 替换为base64图片消息
-                    processed_messages.append({
-                        "type": "image",
-                        "data": {
-                            "file": f"base64://{encoded_string}",
-                            "summary": "[图片]"
-                        }
-                    })
-                else:
-                    # 其他类型消息直接添加
-                    processed_messages.append(msg)
             
             # 发送处理后的消息
             json_message = {
                 "action": "send_group_msg",
                 "params": {
                     "group_id": str(group_id),
-                    "message": processed_messages
+                    "message": message_array
                 }
             }
             await self.websocket.send(json.dumps(json_message))
-            self.Logger.info(f"已发送群消息数组,群号:{group_id},消息长度:{len(processed_messages)}")
+            self.Logger.info(f"已发送群消息数组,群号:{group_id},消息长度:{len(message_array)}")
             return True
             
         except Exception as e:
