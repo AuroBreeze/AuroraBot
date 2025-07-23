@@ -209,6 +209,7 @@ class Command:
         if 'message' in message and isinstance(message['message'], list):
             import os
             import requests
+            import base64
             from datetime import datetime
             
             # 创建存储目录
@@ -231,24 +232,16 @@ class Command:
                     try:
                         url = item['data']['url']
                         filename = item['data']['file']
-                        stamp = 1
-                        stamp+=1
-                        save_path = f'./store/file/images/{stamp}'
                         
-                        # 下载图片并转换为base64
+                        # 直接下载图片并转换为base64，避免先写入文件再读取
                         response = requests.get(url, timeout=10)
-                        with open(save_path, 'wb') as f:
-                            f.write(response.content)
-                        
-                        import base64
-                        with open(save_path, 'rb') as img_file:
-                            base64_data = base64.b64encode(img_file.read()).decode('utf-8')
+                        base64_data = base64.b64encode(response.content).decode('utf-8')
                             
                         combined_msg.append({
                             'type': 'image',
                             'data': {
-                                    "file": f"base64://{base64_data}",
-                                    "summary": "[图片]"
+                                "file": f"base64://{base64_data}",
+                                "summary": "[图片]"
                             }
                         })
                     except Exception as e:
@@ -653,15 +646,20 @@ class Command:
             return False, check_msg
             
         try:
-            # 读取文件内容
-            with open(f'./store/file/talk_{excutor_id}.txt', 'r', encoding='utf-8') as f:
-                content = f.read()
+            # 缓存文件内容，避免重复读取
+            file_path = f'./store/file/talk_{excutor_id}.txt'
+            file_content = None
+            
+            # 尝试从缓存获取文件内容（如果有缓存机制的话）
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    file_content = f.read()
+            except FileNotFoundError:
+                return False, f" 文件{file_path}不存在"
                 
-            if not content:
+            if not file_content:
                 return False, " 文件内容为空"
             
-            f.close() # 关闭文件
-                
             # 创建发送任务
             from ..proxy_cfg import get_active_tasks, get_stop_flags
             active_tasks = get_active_tasks()
@@ -675,9 +673,8 @@ class Command:
 
             async def send_task():
                 try:
-                    # 读取文件所有非空行
-                    with open(f'./store/file/talk_{excutor_id}.txt', 'r', encoding='utf-8') as f:
-                        lines = [line.strip() for line in f if line.strip()]
+                    # 直接使用已读取的文件内容，避免重复读取文件
+                    lines = [line.strip() for line in file_content.split('\n') if line.strip()]
                     
                     if not lines:
                         return False, " 文件内容为空"
@@ -708,16 +705,12 @@ class Command:
                 except Exception as e:
                     self.logger.error(f"发送@消息失败: {e}")
                     return False, f" 发送@消息失败: {e}"
-                finally:
-                    f.close() # 关闭文件
 
             task = asyncio.create_task(send_task())
             active_tasks[group_id] = task
             task.add_done_callback(lambda _: active_tasks.pop(group_id, None))
             return True, " 已启动进程"
             
-        except FileNotFoundError:
-            return False, f" 文件./store/file/talk_{excutor_id}.txt不存在"
         except Exception as e:
             return False, f" 发送@消息失败: {e}"
     
