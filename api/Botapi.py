@@ -350,7 +350,6 @@ class QQAPI_list:
         :return: 是否成功
         """
         try:
-            print(type(message_array))
             
             # 发送处理后的消息
             json_message = {

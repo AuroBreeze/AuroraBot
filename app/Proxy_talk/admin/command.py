@@ -205,9 +205,9 @@ class Command:
             # 创建存储目录
             os.makedirs('./store/file/images', exist_ok=True)
             
-            print(message["message"][0]["data"]["text"][:4])
-            if str(message["message"][0]["data"]["text"][:3]) == '添加词汇':
+            if str(message["message"][0]["data"]["text"][:4]) == '添加词汇':
                 message["message"][0]["data"]["text"] = message["message"][0]["data"]["text"][5:]
+            
             
             combined_msg = []
             for item in message['message']:
@@ -244,12 +244,14 @@ class Command:
                     except Exception as e:
                         self.logger.error(f"下载图片失败: {str(e)}")
                         continue
-            print(combined_msg)
             
             if combined_msg:
                 from .. import proxy_cfg
                 proxy_cfg.add_text = combined_msg
                 self.logger.info(f"添加组合消息(保留顺序),群号:{group_id},执行者:{excutor_id}")
+
+                combined_msg.append({"type": "text", "data": {"text": "\n添加成功"}})
+
                 return True, combined_msg
         
         return False, None
