@@ -89,7 +89,7 @@ modify_docker_compose() {
     fi
     
     cp "$file" "$file.bak"
-    sed -i "s/container_name: Bot/container_name: $container_name/" "$file"
+    sed -i "s/container_name: AuroraBot/container_name: $container_name/" "$file"
     sed -i "s/AuroraBot:/"$service_name:"/" "$file"
     sed -i "s/container_name: AuroraBot/container_name: $app_name/" "$file"
     sed -i "s/- AuroraBot/- $service_name/" "$file"
