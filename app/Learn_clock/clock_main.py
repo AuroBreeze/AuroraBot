@@ -16,26 +16,39 @@ class Clock_learn():
         self.message = message
         self.websocket = websocket
         self.logger.debug(f"初始化Clock_learn, 当前打卡记录: {json.dumps(share_date.clock_records, default=str)}")
+
         
     def _check_reset_time(self):
         """检查是否到达重置时间(凌晨1点)"""
         now = datetime.now(self.bj_tz)
-        if now.hour == 1 and now.minute == 0:  # 凌晨1点
-            self.logger.info("已到达重置时间，正在重置打卡记录...")
-            self._reset_clock_records()
+        self.logger.debug(f"当前时间: {now.date()}")
+        #print(f"当前时间: {now.date()}")
+        if now.hour == 1 and now.minute == 10:  # 凌晨1点
+            from . import share_date
+            self.logger.debug(f"上次重置时间: {share_date.last_reset_date}")
+            #print(f"上次重置时间: {share_date.last_reset_date}")
+            if share_date.last_reset_date != now.date():  # 今天还没重置过
+                self._reset_clock_records()
+                share_date.last_reset_date = now.date()
+                
+                self.logger.info("已到达重置时间，已重置打卡记录")
+
             
     def _reset_clock_records(self):
         """每天凌晨1点重置打卡记录"""
+
         self.logger.info("正在重置所有打卡记录...")
         reset_time = datetime.now(self.bj_tz)
+        from . import share_date
         share_date.clock_records = {}
+        
         self.logger.info("打卡记录已重置")
         self.logger.debug(f"重置后打卡记录: {json.dumps(share_date.clock_records, default=str)}")
         
         # 发送重置通知到所有群组
         if hasattr(self, 'websocket'):
             try:
-                group_ids = ["299355209"]  # 这里需要替换为实际的群组ID列表
+                group_ids = ["736038975"]  # 这里需要替换为实际的群组ID列表 #  299355209
                 for group_id in group_ids:
                     asyncio.run_coroutine_threadsafe(
                         QQAPI_list(self.websocket).send_group_message(
@@ -48,6 +61,8 @@ class Clock_learn():
                 self.logger.error(f"发送重置通知失败: {e}")
     
     async def handle_clock(self):
+
+        self._check_reset_time()
         if self.message.get("message_type") != "group":
             return
         msg = self.message.get("raw_message", "").strip()
@@ -128,7 +143,7 @@ class Clock_learn():
                 return
             
             self._reset_clock_records()
-            self.send_message("✅ 打卡记录已手动重置")
+            await self.send_message("✅ 打卡记录已手动重置")
             return
             
         elif msg.startswith("添加管理员 "):
