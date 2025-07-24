@@ -166,7 +166,7 @@ class Command:
   ┌── 6*. 全局停止: 停止/0            
   ├── 7*. @at 3                   
   ├── 8*. 设置名称 <新群名>              
-  ├── 9*. 添加文件1                      
+  ├── 9*. 添加文件                      
   ├── 10*.下载文件                   
   ├── 11*.授权 <QQ号>                         
   ├── 12*.取消授权 <QQ号>                      
@@ -353,7 +353,7 @@ class Command:
             return False, check_msg
         
         if raw_msg != "#wf":
-            if raw_msg != "添加文件1":
+            if raw_msg != "添加文件":
                 return False, None
             
         from .. import proxy_cfg
