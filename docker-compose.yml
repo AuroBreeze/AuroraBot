@@ -1,12 +1,12 @@
 version: "3"
 services:
-    AuroraBot:
+    aurorabot:
         environment:
             - ACCOUNT=3552638520
         ports:
             - 3001:3001
             - 6099:6099
-        container_name: AuroraBot
+        container_name: Bot
         restart: always
         image: mlikiowa/napcat-docker:latest
     app:
@@ -14,5 +14,5 @@ services:
         restart: always
         container_name: AuroraBot
         depends_on:
-            - AuroraBot
+            - aurorabot
         image: aurora-bot:latest
