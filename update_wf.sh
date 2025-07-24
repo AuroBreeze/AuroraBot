@@ -337,6 +337,16 @@ show_help() {
 case "$1" in
     "--modify")
         echo "开始执行修改操作..."
+        # 先删除所有.version文件
+        BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+        if [ ${#BOT_DIRS[@]} -eq 0 ]; then
+            echo "未找到任何 QQbot_* 目录"
+            exit 1
+        fi
+        
+        for dir in "${BOT_DIRS[@]}"; do
+            remove_version_file "$dir"
+        done
         ;;
     "--restore")
         echo "开始执行还原操作..."
@@ -422,5 +432,23 @@ for dir in "${BOT_DIRS[@]}"; do
     modify_configs "$dir" "$counter" "$success_count" "$fail_count"
     ((counter++))
 done
+
+    # 为所有文件夹创建新的version文件
+    # 先确保删除所有旧的.version文件
+    for dir in "${BOT_DIRS[@]}"; do
+        remove_version_file "$dir"
+    done
+
+    counter=1
+    for dir in "${BOT_DIRS[@]}"; do
+        version_file="$dir/${counter}.version"
+        echo "$counter" > "$version_file"
+        if [[ -f "$version_file" ]]; then
+            echo "成功创建version文件: $version_file"
+        else
+            echo "创建version文件失败: $version_file"
+        fi
+        ((counter++))
+    done
 
     echo "配置修改完成! 成功: $success_count, 失败: $fail_count"
