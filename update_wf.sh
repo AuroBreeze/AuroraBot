@@ -116,7 +116,7 @@ modify_prod_py() {
     fi
     
     cp "$file" "$file.bak"
-    sed -i "s/AuroraBot:/$service_name:/" "$file"
+    sed -i "s/AuroraBot:/$service_name:/g" "$file"
     
     if grep -q "$service_name" "$file"; then
         echo "成功修改prod.py中的WS_URL: $service_name"
@@ -240,8 +240,8 @@ modify_configs() {
 
     echo "检查路径: $target_file"
 
-    # 从docker-compose.yml提取QQ号
-    local qq_number=$(grep -oP 'ACCOUNT=\K\d+' "$dir/docker-compose.yml" 2>/dev/null || echo "0")
+    # 从文件夹名提取QQ号 (格式: QQbot_QQ号_端口号)
+    local qq_number=$(basename "$dir" | grep -oP 'QQbot_\K\d+(?=_\d+)' || echo "0")
     local new_container_name="${qq_number}"
     local new_service_name="${qq_number}"
     local new_app_name="${qq_number}"
@@ -266,7 +266,7 @@ modify_configs() {
         modify_docker_compose "$docker_file" "$new_container_name" "$new_service_name" "$new_app_name" "$port"
         if [[ $? -eq 0 ]]; then
             if [[ -f "$prod_file" ]]; then
-    modify_prod_py "$prod_file" "aurorabot_${qq_number}"
+    modify_prod_py "$prod_file" "${qq_number}"
                 if [[ $? -eq 0 ]]; then ((success_count++)); else ((fail_count++)); fi
             else
                 echo "prod.py不存在: $prod_file"
