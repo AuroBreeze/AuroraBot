@@ -226,7 +226,6 @@ modify_configs() {
     fi
 
     local correct_port=$((6069 + counter))
-    if [[ $counter -eq 1 ]]; then correct_port=6099; fi
 
     local current_port=$(extract_port_from_dir "$dir")
     if [[ "$current_port" != "$correct_port" ]]; then
@@ -245,7 +244,7 @@ modify_configs() {
     local new_container_name="${qq_number}"
     local new_service_name="${qq_number}"
     local new_app_name="${qq_number}"
-    local old_command1="添加文件1"
+    local old_command1="添加文件"
     local new_command1="添加文件$counter"
     local old_command2="更换头像"
     local new_command2="更换头像$counter"
