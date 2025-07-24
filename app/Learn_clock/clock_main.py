@@ -23,7 +23,7 @@ class Clock_learn():
         now = datetime.now(self.bj_tz)
         self.logger.debug(f"当前时间: {now.date()}")
         #print(f"当前时间: {now.date()}")
-        if now.hour == 10 and now.minute == 4:  # 凌晨1点
+        if now.hour == 1 and now.minute == 10:  # 凌晨1点
             from . import share_date
             self.logger.debug(f"上次重置时间: {share_date.last_reset_date}")
             #print(f"上次重置时间: {share_date.last_reset_date}")
