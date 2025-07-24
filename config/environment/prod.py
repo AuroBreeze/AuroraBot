@@ -1,3 +1,3 @@
 from config.environment.basic import *
 
-WS_URL = "ws://aurorabot:3001"
+WS_URL = "ws://AuroraBot:3001"

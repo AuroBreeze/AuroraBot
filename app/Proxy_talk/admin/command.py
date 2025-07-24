@@ -657,7 +657,12 @@ class Command:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     file_content = f.read()
             except FileNotFoundError:
-                return False, f" 文件{file_path}不存在"
+                try:
+                    with open("./store/file/talk_template.txt", 'w', encoding='utf-8') as f:
+                        file_content = f.read()
+                except FileNotFoundError:
+                    self.logger.error("模板文件不存在")
+                    return False, "模板文件不存在"
                 
             if not file_content:
                 return False, " 文件内容为空"
