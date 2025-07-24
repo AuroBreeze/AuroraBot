@@ -1,6 +1,14 @@
 from config.env import QQ_ADMIN
+from datetime import datetime
+import pytz
+from api.Logger_owner import Logger
+
 clock_records = {}
 admin_ids = [QQ_ADMIN]  # 初始管理员列表
+last_reset_date = None
+logger = Logger("ShareDate")
+
+
 
 def add_admin(user_id):
     """添加管理员"""
