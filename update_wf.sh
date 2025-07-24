@@ -89,10 +89,10 @@ modify_docker_compose() {
     fi
     
     cp "$file" "$file.bak"
-    sed -i "s/container_name: AuroraBot/container_name: $container_name/" "$file"
-    sed -i "s/AuroraBot:/"$service_name:"/" "$file"
+    sed -i "s/container_name: Bot/container_name: $container_name/" "$file"
+    sed -i "s/aurorabot:/"$service_name:"/" "$file"
     sed -i "s/container_name: AuroraBot/container_name: $app_name/" "$file"
-    sed -i "s/- AuroraBot/- $service_name/" "$file"
+    sed -i "s/- aurorabot/- $service_name/" "$file"
     sed -i "s/- 6099:6099/- ${port}:6099/" "$file"
     
     if grep -q "$container_name\|$service_name\|$app_name" "$file" && grep -q "${port}:6099" "$file"; then
@@ -116,7 +116,7 @@ modify_prod_py() {
     fi
     
     cp "$file" "$file.bak"
-    sed -i "s/AuroraBot:/$service_name:/g" "$file"
+    sed -i "s/aurorabot:/$service_name:/" "$file"
     
     if grep -q "$service_name" "$file"; then
         echo "成功修改prod.py中的WS_URL: $service_name"
@@ -203,6 +203,7 @@ need_modify() {
     fi
 
     local correct_port=$((6069 + counter))
+    if [[ $counter -eq 1 ]]; then correct_port=6099; fi
 
     local current_port=$(extract_port_from_dir "$dir")
     if [[ "$current_port" != "$correct_port" ]]; then return 0; fi
@@ -226,11 +227,13 @@ modify_configs() {
     fi
 
     local correct_port=$((6069 + counter))
+    if [[ $counter -eq 1 ]]; then correct_port=6099; fi
 
     local current_port=$(extract_port_from_dir "$dir")
+    local need_rename=0
     if [[ "$current_port" != "$correct_port" ]]; then
         echo "检测到端口不匹配: 当前${current_port}, 应为${correct_port}"
-        dir=$(rename_dir_with_port "$dir" "$correct_port")
+        need_rename=1
     fi
 
     local target_file="$dir/app/Proxy_talk/admin/command.py"
@@ -239,12 +242,10 @@ modify_configs() {
 
     echo "检查路径: $target_file"
 
-    # 从文件夹名提取QQ号 (格式: QQbot_QQ号_端口号)
-    local qq_number=$(basename "$dir" | grep -oP 'QQbot_\K\d+(?=_\d+)' || echo "0")
-    local new_container_name="${qq_number}"
-    local new_service_name="${qq_number}"
-    local new_app_name="${qq_number}"
-    local old_command1="添加文件"
+    local new_container_name="Bot_$counter"
+    local new_service_name="aurorabot_$counter"
+    local new_app_name="AuroraBot_$counter"
+    local old_command1="添加文件1"
     local new_command1="添加文件$counter"
     local old_command2="更换头像"
     local new_command2="更换头像$counter"
@@ -262,10 +263,11 @@ modify_configs() {
 
     if [[ -f "$docker_file" ]]; then
         local port=$((6069 + counter))
+        if [[ $counter -eq 1 ]]; then port=6099; fi
         modify_docker_compose "$docker_file" "$new_container_name" "$new_service_name" "$new_app_name" "$port"
         if [[ $? -eq 0 ]]; then
             if [[ -f "$prod_file" ]]; then
-    modify_prod_py "$prod_file" "${qq_number}"
+                modify_prod_py "$prod_file" "$new_service_name"
                 if [[ $? -eq 0 ]]; then ((success_count++)); else ((fail_count++)); fi
             else
                 echo "prod.py不存在: $prod_file"
@@ -277,6 +279,11 @@ modify_configs() {
     else
         echo "docker-compose.yml不存在: $docker_file"
         ((fail_count++))
+    fi
+
+    # 在所有修改完成后执行文件夹重命名
+    if [[ $need_rename -eq 1 ]]; then
+        dir=$(rename_dir_with_port "$dir" "$correct_port")
     fi
 
     return $((success_count + fail_count))
@@ -380,7 +387,7 @@ case "$1" in
         for dir in "${BOT_DIRS[@]}"; do
             port=$((6069 + counter))
             if [[ $counter -eq 1 ]]; then
-            port=6070
+                port=6099
             fi
             rename_dir_with_port "$dir" "$port"
             ((counter++))
