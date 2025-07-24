@@ -10,8 +10,12 @@ modify_command_py() {
     local new_cmd1="$3"
     local old_cmd2="$4"
     local new_cmd2="$5"
-    
-    # 单独检查每个新命令是否已存在
+
+    if [[ ! -f "$file" ]]; then
+        echo "command.py 文件不存在: $file"
+        return 3
+    fi
+
     if grep -q "$new_cmd1" "$file"; then
         echo "command.py已包含新命令: $new_cmd1"
         return 1
@@ -20,17 +24,12 @@ modify_command_py() {
         echo "command.py已包含新命令: $new_cmd2"
         return 1
     fi
-    
-    # 单独检查每个旧命令是否存在
+
     local old_cmd1_found=0
     local old_cmd2_found=0
-    if grep -q "$old_cmd1" "$file"; then
-        old_cmd1_found=1
-    fi
-    if grep -q "$old_cmd2" "$file"; then
-        old_cmd2_found=1
-    fi
-    
+    if grep -q "$old_cmd1" "$file"; then old_cmd1_found=1; fi
+    if grep -q "$old_cmd2" "$file"; then old_cmd2_found=1; fi
+
     if [[ $old_cmd1_found -eq 1 || $old_cmd2_found -eq 1 ]]; then
         cp "$file" "$file.bak"
         if [[ $old_cmd1_found -eq 1 ]]; then
@@ -39,26 +38,13 @@ modify_command_py() {
         if [[ $old_cmd2_found -eq 1 ]]; then
             sed -i "s/$old_cmd2/$new_cmd2/g" "$file"
         fi
-        
-        # 单独验证每个新命令
+
         local success=1
-        if [[ $old_cmd1_found -eq 1 ]] && ! grep -q "$new_cmd1" "$file"; then
-            echo "command.py修改失败: 未找到 $new_cmd1"
-            success=0
-        fi
-        if [[ $old_cmd2_found -eq 1 ]] && ! grep -q "$new_cmd2" "$file"; then
-            echo "command.py修改失败: 未找到 $new_cmd2"
-            success=0
-        fi
-        
+        if [[ $old_cmd1_found -eq 1 ]] && ! grep -q "$new_cmd1" "$file"; then success=0; fi
+        if [[ $old_cmd2_found -eq 1 ]] && ! grep -q "$new_cmd2" "$file"; then success=0; fi
+
         if [[ $success -eq 1 ]]; then
             echo "成功修改command.py: $file"
-            if [[ $old_cmd1_found -eq 1 ]]; then
-                echo "- 替换: $old_cmd1 -> $new_cmd1"
-            fi
-            if [[ $old_cmd2_found -eq 1 ]]; then
-                echo "- 替换: $old_cmd2 -> $new_cmd2"
-            fi
             return 0
         else
             mv "$file.bak" "$file"
@@ -123,23 +109,35 @@ modify_prod_py() {
     fi
 }
 
-# 创建version文件函数
+# 创建version文件函数（根据遍历顺序递增）
 create_version_file() {
-    local dir="$1"
-    local counter="$2"
-    local version_file="$dir/${counter}.version"
-    
-    # 确保完全删除所有.version文件
-    find "$dir" -maxdepth 1 -name "*.version" -type f -delete
-    
-    echo "$counter" > "$version_file"
-    if [[ -f "$version_file" ]]; then
-        echo "成功创建version文件: $version_file"
+    # 避免重复执行：只执行一次递增写入流程
+    if [[ -n "$CREATE_VERSION_ONCE" ]]; then
         return 0
-    else
-        echo "创建version文件失败: $version_file"
-        return 1
     fi
+    export CREATE_VERSION_ONCE=1
+
+    # 获取所有 QQbot_* 目录，按名称排序
+    BOT_DIRS=( $(find /home -maxdepth 1 -type d -name 'QQbot_*' | sort) )
+
+    local index=1
+    for dir in "${BOT_DIRS[@]}"; do
+        # 删除旧的 .version 文件
+        find "$dir" -maxdepth 1 -name "*.version" -type f -delete
+
+        local version_file="$dir/${index}.version"
+        echo "$index" > "$version_file"
+
+        if [[ -f "$version_file" ]]; then
+            echo "成功创建version文件: $version_file"
+        else
+            echo "创建version文件失败: $version_file"
+        fi
+
+        ((index++))
+    done
+
+    return 0
 }
 
 # 删除version文件函数
@@ -174,53 +172,44 @@ rename_dir_with_port() {
     fi
 }
 
-# 检查文件夹是否需要修改
+# need_modify 函数加强文件存在性判断
 need_modify() {
     local dir="$1"
     local counter="$2"
-    
-    # 计算正确端口号
-    local correct_port=$((6069 + counter))
-    if [[ $counter -eq 1 ]]; then
-        correct_port=6099
-    fi
-    
-    # 检查端口号
-    local current_port=$(extract_port_from_dir "$dir")
-    if [[ "$current_port" != "$correct_port" ]]; then
-        return 0  # 需要修改
-    fi
-    
-    # 检查配置文件是否已修改
+
     local target_file="$dir/app/Proxy_talk/admin/command.py"
-    local new_command="添加文件$counter"
-    if grep -q "$new_command" "$target_file"; then
-        return 1  # 已修改，跳过
+    if [[ ! -f "$target_file" ]]; then
+        echo "command.py 不存在: $target_file"
+        return 0
     fi
-    
-    return 0  # 需要修改
+
+    local correct_port=$((6069 + counter))
+    if [[ $counter -eq 1 ]]; then correct_port=6099; fi
+
+    local current_port=$(extract_port_from_dir "$dir")
+    if [[ "$current_port" != "$correct_port" ]]; then return 0; fi
+
+    local new_command="添加文件$counter"
+    if grep -q "$new_command" "$target_file"; then return 1; fi
+
+    return 0
 }
 
-# 修改配置主函数
+# modify_configs 函数加入路径输出和防错处理
 modify_configs() {
     local dir="$1"
     local counter="$2"
     local success_count="$3"
     local fail_count="$4"
 
-    # 先检查是否需要修改
     if ! need_modify "$dir" "$counter"; then
         echo "文件夹已正确配置，跳过: $(basename "$dir")"
         return 0
     fi
 
-    # 计算正确端口号
     local correct_port=$((6069 + counter))
-    if [[ $counter -eq 1 ]]; then
-        correct_port=6099
-    fi
-    
-    # 检查并更新文件夹端口号
+    if [[ $counter -eq 1 ]]; then correct_port=6099; fi
+
     local current_port=$(extract_port_from_dir "$dir")
     if [[ "$current_port" != "$correct_port" ]]; then
         echo "检测到端口不匹配: 当前${current_port}, 应为${correct_port}"
@@ -230,7 +219,9 @@ modify_configs() {
     local target_file="$dir/app/Proxy_talk/admin/command.py"
     local docker_file="$dir/docker-compose.yml"
     local prod_file="$dir/config/environment/prod.py"
-    
+
+    echo "检查路径: $target_file"
+
     local new_container_name="Bot_$counter"
     local new_service_name="aurorabot_$counter"
     local new_app_name="AuroraBot_$counter"
@@ -239,42 +230,32 @@ modify_configs() {
     local old_command2="更换头像"
     local new_command2="更换头像$counter"
 
-    # 修改command.py
     if [[ -f "$target_file" ]]; then
         modify_command_py "$target_file" "$old_command1" "$new_command1" "$old_command2" "$new_command2"
         case $? in
             0) ((success_count++)) ;;
-            2) ((fail_count++)) ;;
-            3) ((fail_count++)) ;;
+            2|3) ((fail_count++)) ;;
         esac
     else
         echo "command.py文件不存在: $target_file"
         ((fail_count++))
     fi
 
-    # 修改docker-compose.yml
     if [[ -f "$docker_file" ]]; then
-        local port=$((6069 + counter))  # 第一个是6099(例外)，第二个6070，第三个6071...
-        if [[ $counter -eq 1 ]]; then
-            port=6099  # 第一个文件夹保持6099不变
-        fi
+        local port=$((6069 + counter))
+        if [[ $counter -eq 1 ]]; then port=6099; fi
         modify_docker_compose "$docker_file" "$new_container_name" "$new_service_name" "$new_app_name" "$port"
-        case $? in
-            0) 
-                # 修改prod.py
-                if [[ -f "$prod_file" ]]; then
-                    modify_prod_py "$prod_file" "$new_service_name"
-                    case $? in
-                        0) ((success_count++)) ;;
-                        2) ((fail_count++)) ;;
-                    esac
-                else
-                    echo "prod.py不存在: $prod_file"
-                    ((fail_count++))
-                fi
-                ;;
-            2) ((fail_count++)) ;;
-        esac
+        if [[ $? -eq 0 ]]; then
+            if [[ -f "$prod_file" ]]; then
+                modify_prod_py "$prod_file" "$new_service_name"
+                if [[ $? -eq 0 ]]; then ((success_count++)); else ((fail_count++)); fi
+            else
+                echo "prod.py不存在: $prod_file"
+                ((fail_count++))
+            fi
+        else
+            ((fail_count++))
+        fi
     else
         echo "docker-compose.yml不存在: $docker_file"
         ((fail_count++))
@@ -282,6 +263,7 @@ modify_configs() {
 
     return $((success_count + fail_count))
 }
+
 
 # 还原配置函数
 restore_configs() {
