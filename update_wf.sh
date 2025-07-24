@@ -245,7 +245,7 @@ modify_configs() {
     local new_container_name="Bot_$counter"
     local new_service_name="aurorabot_$counter"
     local new_app_name="AuroraBot_$counter"
-    local old_command1="添加文件1"
+    local old_command1="添加文件"
     local new_command1="添加文件$counter"
     local old_command2="更换头像"
     local new_command2="更换头像$counter"
@@ -337,16 +337,11 @@ show_help() {
 case "$1" in
     "--modify")
         echo "开始执行修改操作..."
-        # 先删除所有.version文件
         BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
         if [ ${#BOT_DIRS[@]} -eq 0 ]; then
             echo "未找到任何 QQbot_* 目录"
             exit 1
         fi
-        
-        for dir in "${BOT_DIRS[@]}"; do
-            remove_version_file "$dir"
-        done
         ;;
     "--restore")
         echo "开始执行还原操作..."
