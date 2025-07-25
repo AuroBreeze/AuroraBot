@@ -175,10 +175,39 @@ extract_port_from_dir() {
 }
 
 
+# 验证文件夹端口号命名是否有效
+validate_port_in_dirname() {
+    local dir="$1"
+    local dirname=$(basename "$dir")
+    
+    # 检查是否包含端口号
+    if ! [[ "$dirname" =~ _[0-9]{4}$ ]]; then
+        echo "错误: 文件夹名 '$dirname' 必须以4位端口号结尾 (如 QQbot_6099)"
+        return 1
+    fi
+    
+    # 提取端口号
+    local port="${dirname##*_}"
+    
+    # 检查端口号是否重复
+    local duplicate_dirs=($(find "$WORK_DIR" -maxdepth 1 -type d -name "*_${port}" | grep -v "$dir"))
+    if [[ ${#duplicate_dirs[@]} -gt 0 ]]; then
+        echo "错误: 端口号 $port 已存在于其他文件夹: ${duplicate_dirs[@]}"
+        return 1
+    fi
+    
+    return 0
+}
+
 # need_modify 函数加强文件存在性判断
 need_modify() {
     local dir="$1"
     local counter="$2"
+
+    # 先验证文件夹命名
+    if ! validate_port_in_dirname "$dir"; then
+        return 1
+    fi
 
     local target_file="$dir/app/Proxy_talk/admin/command.py"
     if [[ ! -f "$target_file" ]]; then
