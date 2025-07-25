@@ -135,7 +135,6 @@ extract_port_from_dir() {
     echo "${port:-6099}"  # 默认返回6099如果提取不到端口号
 }
 
-
 # 验证文件夹端口号命名是否有效
 validate_port_in_dirname() {
     local dir="$1"
@@ -245,11 +244,8 @@ modify_configs() {
         ((fail_count++))
     fi
 
-    # 不再重命名文件夹
-
     return $((success_count + fail_count))
 }
-
 
 # 还原配置函数
 restore_configs() {
@@ -295,6 +291,35 @@ show_help() {
     echo "功能说明:"
     echo "  批量修改/还原QQbot配置文件"
     exit 0
+}
+
+# 复制txt文件到单个QQbot目录(随机选择)
+copy_txt_files_single() {
+    local dir="$1"
+    local txt_dir="/home/txt"
+    
+    if [[ ! -d "$txt_dir" ]]; then
+        echo "txt目录不存在: $txt_dir"
+        return 1
+    fi
+
+    # 获取所有txt文件并随机选择一个
+    local txt_files=($(find "$txt_dir" -maxdepth 1 -type f -name '*.txt'))
+    if [[ ${#txt_files[@]} -eq 0 ]]; then
+        echo "未找到任何txt文件"
+        return 1
+    fi
+
+    # 随机选择一个文件
+    local random_index=$((RANDOM % ${#txt_files[@]}))
+    local txt_file="${txt_files[$random_index]}"
+
+    local target_dir="$dir/store/file"
+    mkdir -p "$target_dir"
+    cp "$txt_file" "$target_dir/talk_template.txt"
+    echo "已随机复制文件: $txt_file 到 $target_dir/talk_template.txt"
+    
+    return 0
 }
 
 # 复制txt文件到所有QQbot目录
@@ -379,6 +404,9 @@ case "$1" in
         
         echo "开始修改单个目录: $2"
         BOT_DIRS=("$2")
+        
+        # 复制txt文件到指定目录
+        copy_txt_files_single "$2"
         ;;
     *)
         show_help
