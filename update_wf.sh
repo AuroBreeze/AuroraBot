@@ -171,25 +171,9 @@ remove_version_file() {
 extract_port_from_dir() {
     local dir="$1"
     local port=$(basename "$dir" | grep -oE '[0-9]{4}$')
-    echo "${port:-0}"
+    echo "${port:-6099}"  # 默认返回6099如果提取不到端口号
 }
 
-# 重命名文件夹以更新端口号
-rename_dir_with_port() {
-    local dir="$1"
-    local new_port="$2"
-    local parent_dir=$(dirname "$dir")
-    local dir_name=$(basename "$dir")
-    local new_dir="${parent_dir}/${dir_name%_*}_${new_port}"
-    
-    if [[ "$dir" != "$new_dir" ]]; then
-        mv "$dir" "$new_dir"
-        echo "已将文件夹重命名为: $(basename "$new_dir")"
-        echo "$new_dir"  # 返回新路径
-    else
-        echo "$dir"  # 返回原路径
-    fi
-}
 
 # need_modify 函数加强文件存在性判断
 need_modify() {
@@ -202,11 +186,8 @@ need_modify() {
         return 0
     fi
 
-    local correct_port=$((6069 + counter))
-    if [[ $counter -eq 1 ]]; then correct_port=6099; fi
-
     local current_port=$(extract_port_from_dir "$dir")
-    if [[ "$current_port" != "$correct_port" ]]; then return 0; fi
+    if [[ "$current_port" -eq 0 ]]; then return 0; fi
 
     local new_command="添加文件$counter"
     if grep -q "$new_command" "$target_file"; then return 1; fi
@@ -226,15 +207,8 @@ modify_configs() {
         return 0
     fi
 
-    local correct_port=$((6069 + counter))
-    if [[ $counter -eq 1 ]]; then correct_port=6099; fi
-
     local current_port=$(extract_port_from_dir "$dir")
     local need_rename=0
-    if [[ "$current_port" != "$correct_port" ]]; then
-        echo "检测到端口不匹配: 当前${current_port}, 应为${correct_port}"
-        need_rename=1
-    fi
 
     local target_file="$dir/app/Proxy_talk/admin/command.py"
     local docker_file="$dir/docker-compose.yml"
@@ -262,8 +236,7 @@ modify_configs() {
     fi
 
     if [[ -f "$docker_file" ]]; then
-        local port=$((6069 + counter))
-        if [[ $counter -eq 1 ]]; then port=6099; fi
+        local port=$(extract_port_from_dir "$dir")
         modify_docker_compose "$docker_file" "$new_container_name" "$new_service_name" "$new_app_name" "$port"
         if [[ $? -eq 0 ]]; then
             if [[ -f "$prod_file" ]]; then
@@ -281,10 +254,7 @@ modify_configs() {
         ((fail_count++))
     fi
 
-    # 在所有修改完成后执行文件夹重命名
-    if [[ $need_rename -eq 1 ]]; then
-        dir=$(rename_dir_with_port "$dir" "$correct_port")
-    fi
+    # 不再重命名文件夹
 
     return $((success_count + fail_count))
 }
@@ -333,7 +303,6 @@ show_help() {
     echo "  ./update_wf.sh --restore       执行配置还原"
     echo "  ./update_wf.sh --create-version        为所有QQbot文件夹创建version文件"
     echo "  ./update_wf.sh --remove-version        删除所有QQbot文件夹的version文件"
-    echo "  ./update_wf.sh --update-port        自动更新所有QQbot文件夹端口号"
     echo "  ./update_wf.sh --copy-txt           复制/home/txt下的txt文件到所有QQbot目录"
     echo ""
     echo "功能说明:"
@@ -431,26 +400,6 @@ case "$1" in
             remove_version_file "$dir"
         done
         echo "version文件删除完成"
-        exit 0
-        ;;
-    "--update-port")
-        echo "开始自动更新所有QQbot文件夹端口号..."
-        BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
-        if [ ${#BOT_DIRS[@]} -eq 0 ]; then
-            echo "未找到任何 QQbot_* 目录"
-            exit 1
-        fi
-        
-        counter=1
-        for dir in "${BOT_DIRS[@]}"; do
-            port=$((6069 + counter))
-            if [[ $counter -eq 1 ]]; then
-                port=6099
-            fi
-            rename_dir_with_port "$dir" "$port"
-            ((counter++))
-        done
-        echo "端口号更新完成"
         exit 0
         ;;
     "--copy-txt")
