@@ -637,7 +637,7 @@ class Command:
         qq_number = match.group(1)  # 提取到的QQ号
 
         from ..proxy_cfg import ADMIN_ID
-        if qq_number == ADMIN_ID:
+        if qq_number != ADMIN_ID:
             return False, " 不许大逆不道你71爷爷"
             
         group_id = str(message.get('group_id'))

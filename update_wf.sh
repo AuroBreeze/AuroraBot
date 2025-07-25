@@ -317,6 +317,13 @@ restore_configs() {
     
     # 删除version文件
     remove_version_file "$dir"
+    
+    # 删除复制的txt文件
+    local txt_file="$dir/store/file/talk_template.txt"
+    if [[ -f "$txt_file" ]]; then
+        rm -f "$txt_file"
+        echo "已删除txt文件: $txt_file"
+    fi
 }
 
 # 显示帮助信息
@@ -327,10 +334,53 @@ show_help() {
     echo "  ./update_wf.sh --create-version        为所有QQbot文件夹创建version文件"
     echo "  ./update_wf.sh --remove-version        删除所有QQbot文件夹的version文件"
     echo "  ./update_wf.sh --update-port        自动更新所有QQbot文件夹端口号"
+    echo "  ./update_wf.sh --copy-txt           复制/home/txt下的txt文件到所有QQbot目录"
     echo ""
     echo "功能说明:"
     echo "  批量修改/还原QQbot配置文件"
     exit 0
+}
+
+# 复制txt文件到所有QQbot目录
+copy_txt_files() {
+    local txt_dir="/home/txt"
+    if [[ ! -d "$txt_dir" ]]; then
+        echo "txt目录不存在: $txt_dir"
+        return 1
+    fi
+
+    # 获取所有txt文件
+    local txt_files=($(find "$txt_dir" -maxdepth 1 -type f -name '*.txt' | sort))
+    if [ ${#txt_files[@]} -eq 0 ]; then
+        echo "未找到任何txt文件"
+        return 1
+    fi
+
+    # 获取所有QQbot目录
+    local bot_dirs=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+    if [ ${#bot_dirs[@]} -eq 0 ]; then
+        echo "未找到任何 QQbot_* 目录"
+        return 1
+    fi
+
+    local file_index=0
+    for bot_dir in "${bot_dirs[@]}"; do
+        local target_dir="$bot_dir/store/file"
+        mkdir -p "$target_dir"
+        
+        local source_file="${txt_files[$file_index]}"
+        if [[ -z "$source_file" ]]; then
+            file_index=0
+            source_file="${txt_files[$file_index]}"
+        fi
+
+        cp "$source_file" "$target_dir/talk_template.txt"
+        echo "已复制文件: $source_file 到 $target_dir/talk_template.txt"
+        
+        ((file_index++))
+    done
+
+    return 0
 }
 
 # 主流程
@@ -342,6 +392,9 @@ case "$1" in
             echo "未找到任何 QQbot_* 目录"
             exit 1
         fi
+        
+        # 先复制txt文件
+        copy_txt_files
         ;;
     "--restore")
         echo "开始执行还原操作..."
@@ -399,6 +452,11 @@ case "$1" in
         done
         echo "端口号更新完成"
         exit 0
+        ;;
+    "--copy-txt")
+        echo "开始复制txt文件到所有QQbot目录..."
+        copy_txt_files
+        exit $?
         ;;
     *)
         show_help
