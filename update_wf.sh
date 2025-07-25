@@ -128,45 +128,6 @@ modify_prod_py() {
     fi
 }
 
-# 创建version文件函数（根据遍历顺序递增）
-create_version_file() {
-    # 避免重复执行：只执行一次递增写入流程
-    if [[ -n "$CREATE_VERSION_ONCE" ]]; then
-        return 0
-    fi
-    export CREATE_VERSION_ONCE=1
-
-    # 获取所有 QQbot_* 目录，按名称排序
-    BOT_DIRS=( $(find /home -maxdepth 1 -type d -name 'QQbot_*' | sort) )
-
-    local index=1
-    for dir in "${BOT_DIRS[@]}"; do
-        # 删除旧的 .version 文件
-        find "$dir" -maxdepth 1 -name "*.version" -type f -delete
-
-        local version_file="$dir/${index}.version"
-        echo "$index" > "$version_file"
-
-        if [[ -f "$version_file" ]]; then
-            echo "成功创建version文件: $version_file"
-        else
-            echo "创建version文件失败: $version_file"
-        fi
-
-        ((index++))
-    done
-
-    return 0
-}
-
-# 删除version文件函数
-remove_version_file() {
-    local dir="$1"
-    # 使用find命令确保删除所有.version文件
-    find "$dir" -maxdepth 1 -name "*.version" -type f -delete
-    echo "已删除目录 $dir 下的所有.version文件"
-}
-
 # 从文件夹名提取端口号
 extract_port_from_dir() {
     local dir="$1"
@@ -315,9 +276,6 @@ restore_configs() {
         echo "已还原prod.py: $dir/config/environment/prod.py"
     fi
     
-    # 删除version文件
-    remove_version_file "$dir"
-    
     # 删除复制的txt文件
     local txt_file="$dir/store/file/talk_template.txt"
     if [[ -f "$txt_file" ]]; then
@@ -331,8 +289,6 @@ show_help() {
     echo "使用方法:"
     echo "  ./update_wf.sh --modify        执行配置修改"
     echo "  ./update_wf.sh --restore       执行配置还原"
-    echo "  ./update_wf.sh --create-version        为所有QQbot文件夹创建version文件"
-    echo "  ./update_wf.sh --remove-version        删除所有QQbot文件夹的version文件"
     echo "  ./update_wf.sh --copy-txt           复制/home/txt下的txt文件到所有QQbot目录"
     echo "  ./update_wf.sh --modify-single [目录]  修改指定目录下的配置文件"
     echo ""
@@ -405,34 +361,6 @@ case "$1" in
         echo "还原操作完成"
         exit 0
         ;;
-    "--create-version")
-        echo "开始为所有QQbot文件夹创建version文件..."
-        BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
-        if [ ${#BOT_DIRS[@]} -eq 0 ]; then
-            echo "未找到任何 QQbot_* 目录"
-            exit 1
-        fi
-        
-        for dir in "${BOT_DIRS[@]}"; do
-            create_version_file "$dir" "1"
-        done
-        echo "version文件创建完成"
-        exit 0
-        ;;
-    "--remove-version")
-        echo "开始删除所有QQbot文件夹的version文件..."
-        BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
-        if [ ${#BOT_DIRS[@]} -eq 0 ]; then
-            echo "未找到任何 QQbot_* 目录"
-            exit 1
-        fi
-        
-        for dir in "${BOT_DIRS[@]}"; do
-            remove_version_file "$dir"
-        done
-        echo "version文件删除完成"
-        exit 0
-        ;;
     "--copy-txt")
         echo "开始复制txt文件到所有QQbot目录..."
         copy_txt_files
@@ -480,22 +408,4 @@ for dir in "${BOT_DIRS[@]}"; do
     ((counter++))
 done
 
-    # 为所有文件夹创建新的version文件
-    # 先确保删除所有旧的.version文件
-    for dir in "${BOT_DIRS[@]}"; do
-        remove_version_file "$dir"
-    done
-
-    counter=1
-    for dir in "${BOT_DIRS[@]}"; do
-        version_file="$dir/${counter}.version"
-        echo "$counter" > "$version_file"
-        if [[ -f "$version_file" ]]; then
-            echo "成功创建version文件: $version_file"
-        else
-            echo "创建version文件失败: $version_file"
-        fi
-        ((counter++))
-    done
-
-    echo "配置修改完成! 成功: $success_count, 失败: $fail_count"
+echo "配置修改完成! 成功: $success_count, 失败: $fail_count"
