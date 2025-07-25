@@ -218,7 +218,7 @@ need_modify() {
     local current_port=$(extract_port_from_dir "$dir")
     if [[ "$current_port" -eq 0 ]]; then return 0; fi
 
-    local new_command="添加文件$counter"
+    local new_command="添加文件$current_port"
     if grep -q "$new_command" "$target_file"; then return 1; fi
 
     return 0
