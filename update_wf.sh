@@ -333,6 +333,7 @@ show_help() {
     echo "  ./update_wf.sh --create-version        为所有QQbot文件夹创建version文件"
     echo "  ./update_wf.sh --remove-version        删除所有QQbot文件夹的version文件"
     echo "  ./update_wf.sh --copy-txt           复制/home/txt下的txt文件到所有QQbot目录"
+    echo "  ./update_wf.sh --modify-single [目录]  修改指定目录下的配置文件"
     echo ""
     echo "功能说明:"
     echo "  批量修改/还原QQbot配置文件"
@@ -435,6 +436,20 @@ case "$1" in
         echo "开始复制txt文件到所有QQbot目录..."
         copy_txt_files
         exit $?
+        ;;
+    "--modify-single")
+        if [[ -z "$2" ]]; then
+            echo "错误: 必须指定要修改的目录路径"
+            exit 1
+        fi
+        
+        if [[ ! -d "$2" ]]; then
+            echo "错误: 目录不存在: $2"
+            exit 1
+        fi
+        
+        echo "开始修改单个目录: $2"
+        BOT_DIRS=("$2")
         ;;
     *)
         show_help
