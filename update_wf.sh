@@ -245,13 +245,14 @@ modify_configs() {
 
     echo "检查路径: $target_file"
 
-    local new_container_name="Bot_$counter"
-    local new_service_name="aurorabot_$counter"
-    local new_app_name="AuroraBot_$counter"
+    local port=$(extract_port_from_dir "$dir")
+    local new_container_name="Bot_$port"
+    local new_service_name="aurorabot_$port"
+    local new_app_name="AuroraBot_$port"
     local old_command1="添加文件"
-    local new_command1="添加文件$counter"
+    local new_command1="添加文件$port"
     local old_command2="更换头像"
-    local new_command2="更换头像$counter"
+    local new_command2="更换头像$port"
 
     if [[ -f "$target_file" ]]; then
         modify_command_py "$target_file" "$old_command1" "$new_command1" "$old_command2" "$new_command2"
