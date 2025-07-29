@@ -280,6 +280,33 @@ restore_configs() {
     fi
 }
 
+# 复制并覆盖文件函数(覆盖所有QQbot_*文件夹)
+copy_and_overwrite_files() {
+    local source_dir="/home/new_use"
+    
+    if [[ ! -d "$source_dir" ]]; then
+        echo "错误: 源目录不存在: $source_dir"
+        return 1
+    fi
+    
+    # 获取所有QQbot_*目录
+    local bot_dirs=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+    if [ ${#bot_dirs[@]} -eq 0 ]; then
+        echo "未找到任何 QQbot_* 目录"
+        return 1
+    fi
+
+    echo "开始从 $source_dir 复制文件到所有QQbot目录并覆盖..."
+    
+    for bot_dir in "${bot_dirs[@]}"; do
+        echo "正在处理: $bot_dir"
+        cp -rf "$source_dir"/* "$bot_dir"/
+    done
+    
+    echo "已完成 ${#bot_dirs[@]} 个QQbot目录的文件覆盖"
+    return 0
+}
+
 # 显示帮助信息
 show_help() {
     echo "使用方法:"
@@ -287,6 +314,7 @@ show_help() {
     echo "  ./update_wf.sh --restore       执行配置还原"
     echo "  ./update_wf.sh --copy-txt           复制/home/txt下的txt文件到所有QQbot目录"
     echo "  ./update_wf.sh --modify-single [目录]  修改指定目录下的配置文件"
+    echo "  ./update_wf.sh --copy-overwrite     复制/home/new_use下的文件覆盖所有QQbot_*目录"
     echo ""
     echo "功能说明:"
     echo "  批量修改/还原QQbot配置文件"
@@ -389,6 +417,11 @@ case "$1" in
     "--copy-txt")
         echo "开始复制txt文件到所有QQbot目录..."
         copy_txt_files
+        exit $?
+        ;;
+    "--copy-overwrite")
+        echo "开始复制并覆盖文件操作..."
+        copy_and_overwrite_files
         exit $?
         ;;
     "--modify-single")
