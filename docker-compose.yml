@@ -1,18 +1,41 @@
-version: "3"
+# version: "3.8"
+
 services:
-    aurorabot:
-        environment:
-            - ACCOUNT=3552638520
-        ports:
-            - 3001:3001
-            - 6099:6099
-        container_name: Bot
-        restart: always
-        image: mlikiowa/napcat-docker:latest
-    app:
-        build: .
-        restart: always
-        container_name: AuroraBot
-        depends_on:
-            - aurorabot
-        image: aurora-bot:latest
+  aurorabot:
+    container_name: Bot
+    image: mlikiowa/napcat-docker:latest
+
+    environment:
+      - ACCOUNT=3552638520
+
+    ports:
+      - "3001:3001"
+      - "6099:6099"
+
+    volumes:
+      - tmp_nt_db:/app/nt_db       # tmpfs 映射，限制为 64MB
+      - ./config/nt_config:/app/napcat/config
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "1"
+
+    restart: unless-stopped
+
+  app:
+    build: .
+    image: aurora-bot:latest
+    container_name: AuroraBot
+    restart: always
+    depends_on:
+      - aurorabot
+
+volumes:
+  tmp_nt_db:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=64m

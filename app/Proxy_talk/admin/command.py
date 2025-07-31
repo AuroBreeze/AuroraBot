@@ -20,6 +20,7 @@ class Command_API:
     async def handle_command(self) -> tuple[bool, str]:
         # 处理好友请求
         judge,msg_or_err = await self.api.approve_friend_add(self.message,self.websocket)
+        judge,msg_or_err = await self.api.approve_invite_group(self.message,self.websocket)
 
         group_id = str(self.message.get('group_id'))
         excutor_id = str(self.message.get('user_id'))
@@ -658,7 +659,7 @@ class Command:
                     file_content = f.read()
             except FileNotFoundError:
                 try:
-                    with open("./store/file/talk_template.txt", 'w', encoding='utf-8') as f:
+                    with open("./store/file/talk_template.txt", 'r', encoding='utf-8') as f:
                         file_content = f.read()
                 except FileNotFoundError:
                     self.logger.error("模板文件不存在")
@@ -1070,3 +1071,45 @@ class Command:
         except Exception as e:
             self.logger.error(f"处理头像设置出错: {str(e)}")
             return False, f"处理头像设置出错: {str(e)}"
+    async def approve_invite_group(self, message:dict, websocket) -> tuple[bool, str]:
+        """
+        审批加群请求
+        """
+        """处理消息，检查是否为群邀请事件"""
+        try:
+            # 只处理群邀请请求
+            if (message.get("post_type") == "request" and
+                    message.get("request_type") == "group" and
+                    message.get("sub_type") == "invite"):
+                pass
+            else:
+                return False, None
+        except Exception as e:
+            self.logger.error(f"处理消息时出错: {e}")
+            return False,None
+        
+        try:
+            group_id = message.get("group_id")
+            user_id = str(message.get("user_id"))
+            comment = message.get("comment", "")
+            flag = message.get("flag")
+
+            self.logger.info(f"收到群邀请: 群号={group_id}, 邀请人={user_id}, 理由={comment}")
+
+            admin_qq_list = StoreProxy().list_all()
+            
+            from .. import proxy_cfg
+            admin_qq_list.append(str(proxy_cfg.ADMIN_ID))
+
+            # 检查邀请人是否为管理员
+            if user_id in admin_qq_list:
+                self.logger.info(f"管理员 {user_id} 邀请加群 {group_id}，自动同意")
+                await QQAPI_list(websocket).set_group_add_request(flag, True)
+            else:
+                self.logger.info(f"非管理员 {user_id} 邀请加群 {group_id}，自动拒绝")
+                await QQAPI_list(websocket).set_group_add_request(flag, False)
+
+            self.logger.info(f"已处理群邀请: 群号={group_id}, 邀请人={user_id}, 理由={comment}")
+            return True, None
+        except Exception as e:
+            self.logger.error(f"处理群邀请时出错: {e}")

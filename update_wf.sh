@@ -128,67 +128,70 @@ modify_prod_py() {
     fi
 }
 
-# 创建version文件函数（根据遍历顺序递增）
-create_version_file() {
-    # 避免重复执行：只执行一次递增写入流程
-    if [[ -n "$CREATE_VERSION_ONCE" ]]; then
-        return 0
-    fi
-    export CREATE_VERSION_ONCE=1
-
-    # 获取所有 QQbot_* 目录，按名称排序
-    BOT_DIRS=( $(find /home -maxdepth 1 -type d -name 'QQbot_*' | sort) )
-
-    local index=1
-    for dir in "${BOT_DIRS[@]}"; do
-        # 删除旧的 .version 文件
-        find "$dir" -maxdepth 1 -name "*.version" -type f -delete
-
-        local version_file="$dir/${index}.version"
-        echo "$index" > "$version_file"
-
-        if [[ -f "$version_file" ]]; then
-            echo "成功创建version文件: $version_file"
-        else
-            echo "创建version文件失败: $version_file"
-        fi
-
-        ((index++))
-    done
-
-    return 0
-}
-
-# 删除version文件函数
-remove_version_file() {
-    local dir="$1"
-    # 使用find命令确保删除所有.version文件
-    find "$dir" -maxdepth 1 -name "*.version" -type f -delete
-    echo "已删除目录 $dir 下的所有.version文件"
-}
-
 # 从文件夹名提取端口号
 extract_port_from_dir() {
     local dir="$1"
     local port=$(basename "$dir" | grep -oE '[0-9]{4}$')
-    echo "${port:-0}"
+    echo "${port:-6099}"  # 默认返回6099如果提取不到端口号
 }
 
-# 重命名文件夹以更新端口号
-rename_dir_with_port() {
+# 从文件夹名提取QQ号
+extract_qq_from_dir() {
     local dir="$1"
-    local new_port="$2"
-    local parent_dir=$(dirname "$dir")
-    local dir_name=$(basename "$dir")
-    local new_dir="${parent_dir}/${dir_name%_*}_${new_port}"
+    local qq=$(basename "$dir" | grep -oE 'QQbot_([0-9]+)' | cut -d'_' -f2)
+    echo "$qq"
+}
+
+# 重命名onebot11.json文件并备份
+rename_onebot11_json() {
+    local dir="$1"
+    local qq="$2"
     
-    if [[ "$dir" != "$new_dir" ]]; then
-        mv "$dir" "$new_dir"
-        echo "已将文件夹重命名为: $(basename "$new_dir")"
-        echo "$new_dir"  # 返回新路径
-    else
-        echo "$dir"  # 返回原路径
+    local json_file="$dir/config/nt_config/onebot11.json"
+    local new_name="$dir/config/nt_config/onebot11_${qq}.json"
+    
+    if [[ ! -f "$json_file" ]]; then
+        echo "onebot11.json文件不存在: $json_file"
+        return 1
     fi
+    
+    # 备份原文件
+    cp "$json_file" "$json_file.bak"
+    echo "已备份onebot11.json: $json_file.bak"
+    
+    # 重命名文件
+    mv "$json_file" "$new_name"
+    if [[ $? -eq 0 ]]; then
+        echo "成功重命名onebot11.json为: $new_name"
+        return 0
+    else
+        echo "重命名失败: $json_file -> $new_name"
+        return 1
+    fi
+}
+
+# 验证文件夹端口号命名是否有效
+validate_port_in_dirname() {
+    local dir="$1"
+    local dirname=$(basename "$dir")
+    
+    # 检查是否包含端口号
+    if ! [[ "$dirname" =~ _[0-9]{4}$ ]]; then
+        echo "错误: 文件夹名 '$dirname' 必须以4位端口号结尾 (如 QQbot_6099)"
+        return 1
+    fi
+    
+    # 提取端口号
+    local port="${dirname##*_}"
+    
+    # 检查端口号是否重复
+    local duplicate_dirs=($(find "$WORK_DIR" -maxdepth 1 -type d -name "*_${port}" | grep -v "$dir"))
+    if [[ ${#duplicate_dirs[@]} -gt 0 ]]; then
+        echo "错误: 端口号 $port 已存在于其他文件夹: ${duplicate_dirs[@]}"
+        return 1
+    fi
+    
+    return 0
 }
 
 # need_modify 函数加强文件存在性判断
@@ -196,19 +199,21 @@ need_modify() {
     local dir="$1"
     local counter="$2"
 
+    # 先验证文件夹命名
+    if ! validate_port_in_dirname "$dir"; then
+        return 1
+    fi
+
     local target_file="$dir/app/Proxy_talk/admin/command.py"
     if [[ ! -f "$target_file" ]]; then
         echo "command.py 不存在: $target_file"
         return 0
     fi
 
-    local correct_port=$((6069 + counter))
-    if [[ $counter -eq 1 ]]; then correct_port=6099; fi
-
     local current_port=$(extract_port_from_dir "$dir")
-    if [[ "$current_port" != "$correct_port" ]]; then return 0; fi
+    if [[ "$current_port" -eq 0 ]]; then return 0; fi
 
-    local new_command="添加文件$counter"
+    local new_command="添加文件$current_port"
     if grep -q "$new_command" "$target_file"; then return 1; fi
 
     return 0
@@ -226,15 +231,8 @@ modify_configs() {
         return 0
     fi
 
-    local correct_port=$((6069 + counter))
-    if [[ $counter -eq 1 ]]; then correct_port=6099; fi
-
     local current_port=$(extract_port_from_dir "$dir")
     local need_rename=0
-    if [[ "$current_port" != "$correct_port" ]]; then
-        echo "检测到端口不匹配: 当前${current_port}, 应为${correct_port}"
-        need_rename=1
-    fi
 
     local target_file="$dir/app/Proxy_talk/admin/command.py"
     local docker_file="$dir/docker-compose.yml"
@@ -242,13 +240,14 @@ modify_configs() {
 
     echo "检查路径: $target_file"
 
-    local new_container_name="Bot_$counter"
-    local new_service_name="aurorabot_$counter"
-    local new_app_name="AuroraBot_$counter"
-    local old_command1="添加文件1"
-    local new_command1="添加文件$counter"
+    local port=$(extract_port_from_dir "$dir")
+    local new_container_name="Bot_$port"
+    local new_service_name="aurorabot_$port"
+    local new_app_name="AuroraBot_$port"
+    local old_command1="添加文件"
+    local new_command1="添加文件$port"
     local old_command2="更换头像"
-    local new_command2="更换头像$counter"
+    local new_command2="更换头像$port"
 
     if [[ -f "$target_file" ]]; then
         modify_command_py "$target_file" "$old_command1" "$new_command1" "$old_command2" "$new_command2"
@@ -262,8 +261,7 @@ modify_configs() {
     fi
 
     if [[ -f "$docker_file" ]]; then
-        local port=$((6069 + counter))
-        if [[ $counter -eq 1 ]]; then port=6099; fi
+        local port=$(extract_port_from_dir "$dir")
         modify_docker_compose "$docker_file" "$new_container_name" "$new_service_name" "$new_app_name" "$port"
         if [[ $? -eq 0 ]]; then
             if [[ -f "$prod_file" ]]; then
@@ -281,14 +279,8 @@ modify_configs() {
         ((fail_count++))
     fi
 
-    # 在所有修改完成后执行文件夹重命名
-    if [[ $need_rename -eq 1 ]]; then
-        dir=$(rename_dir_with_port "$dir" "$correct_port")
-    fi
-
     return $((success_count + fail_count))
 }
-
 
 # 还原配置函数
 restore_configs() {
@@ -315,8 +307,54 @@ restore_configs() {
         echo "已还原prod.py: $dir/config/environment/prod.py"
     fi
     
-    # 删除version文件
-    remove_version_file "$dir"
+    # 还原onebot11.json
+    local json_backup="$dir/config/nt_config/onebot11.json.bak"
+    local json_files=($(find "$dir/config/nt_config" -maxdepth 1 -type f -name 'onebot11_*.json'))
+    if [[ -f "$json_backup" ]]; then
+        rm -f "$dir/config/nt_config/onebot11.json" 2>/dev/null
+        mv "$json_backup" "$dir/config/nt_config/onebot11.json"
+        echo "已还原onebot11.json: $dir/config/nt_config/onebot11.json"
+        
+        # 删除重命名后的文件
+        for json_file in "${json_files[@]}"; do
+            rm -f "$json_file"
+            echo "已删除重命名文件: $json_file"
+        done
+    fi
+    
+    # 删除复制的txt文件
+    local txt_file="$dir/store/file/talk_template.txt"
+    if [[ -f "$txt_file" ]]; then
+        rm -f "$txt_file"
+        echo "已删除txt文件: $txt_file"
+    fi
+}
+
+# 复制并覆盖文件函数(覆盖所有QQbot_*文件夹)
+copy_and_overwrite_files() {
+    local source_dir="/home/new_use"
+    
+    if [[ ! -d "$source_dir" ]]; then
+        echo "错误: 源目录不存在: $source_dir"
+        return 1
+    fi
+    
+    # 获取所有QQbot_*目录
+    local bot_dirs=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+    if [ ${#bot_dirs[@]} -eq 0 ]; then
+        echo "未找到任何 QQbot_* 目录"
+        return 1
+    fi
+
+    echo "开始从 $source_dir 复制文件到所有QQbot目录并覆盖..."
+    
+    for bot_dir in "${bot_dirs[@]}"; do
+        echo "正在处理: $bot_dir"
+        cp -rf "$source_dir"/* "$bot_dir"/
+    done
+    
+    echo "已完成 ${#bot_dirs[@]} 个QQbot目录的文件覆盖"
+    return 0
 }
 
 # 显示帮助信息
@@ -324,29 +362,98 @@ show_help() {
     echo "使用方法:"
     echo "  ./update_wf.sh --modify        执行配置修改"
     echo "  ./update_wf.sh --restore       执行配置还原"
-    echo "  ./update_wf.sh --create-version        为所有QQbot文件夹创建version文件"
-    echo "  ./update_wf.sh --remove-version        删除所有QQbot文件夹的version文件"
-    echo "  ./update_wf.sh --update-port        自动更新所有QQbot文件夹端口号"
+    echo "  ./update_wf.sh --copy-txt           复制/home/txt下的txt文件到所有QQbot目录"
+    echo "  ./update_wf.sh --modify-single [目录]  修改指定目录下的配置文件"
+    echo "  ./update_wf.sh --copy-overwrite     复制/home/new_use下的文件覆盖所有QQbot_*目录"
     echo ""
     echo "功能说明:"
     echo "  批量修改/还原QQbot配置文件"
     exit 0
 }
 
+# 复制txt文件到单个QQbot目录(随机选择)
+copy_txt_files_single() {
+    local dir="$1"
+    local txt_dir="/home/txt"
+    
+    if [[ ! -d "$txt_dir" ]]; then
+        echo "txt目录不存在: $txt_dir"
+        return 1
+    fi
+
+    # 获取所有txt文件并随机选择一个
+    local txt_files=($(find "$txt_dir" -maxdepth 1 -type f -name '*.txt'))
+    if [[ ${#txt_files[@]} -eq 0 ]]; then
+        echo "未找到任何txt文件"
+        return 1
+    fi
+
+    # 随机选择一个文件
+    local random_index=$((RANDOM % ${#txt_files[@]}))
+    local txt_file="${txt_files[$random_index]}"
+
+    local target_dir="$dir/store/file"
+    mkdir -p "$target_dir"
+    cp "$txt_file" "$target_dir/talk_template.txt"
+    echo "已随机复制文件: $txt_file 到 $target_dir/talk_template.txt"
+    
+    return 0
+}
+
+# 复制txt文件到所有QQbot目录
+copy_txt_files() {
+    local txt_dir="/home/txt"
+    if [[ ! -d "$txt_dir" ]]; then
+        echo "txt目录不存在: $txt_dir"
+        return 1
+    fi
+
+    # 获取所有txt文件
+    local txt_files=($(find "$txt_dir" -maxdepth 1 -type f -name '*.txt' | sort))
+    if [ ${#txt_files[@]} -eq 0 ]; then
+        echo "未找到任何txt文件"
+        return 1
+    fi
+
+    # 获取所有QQbot目录
+    local bot_dirs=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+    if [ ${#bot_dirs[@]} -eq 0 ]; then
+        echo "未找到任何 QQbot_* 目录"
+        return 1
+    fi
+
+    local file_index=0
+    for bot_dir in "${bot_dirs[@]}"; do
+        local target_dir="$bot_dir/store/file"
+        mkdir -p "$target_dir"
+        
+        local source_file="${txt_files[$file_index]}"
+        if [[ -z "$source_file" ]]; then
+            file_index=0
+            source_file="${txt_files[$file_index]}"
+        fi
+
+        cp "$source_file" "$target_dir/talk_template.txt"
+        echo "已复制文件: $source_file 到 $target_dir/talk_template.txt"
+        
+        ((file_index++))
+    done
+
+    return 0
+}
+
 # 主流程
 case "$1" in
     "--modify")
         echo "开始执行修改操作..."
-        # 先删除所有.version文件
         BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
         if [ ${#BOT_DIRS[@]} -eq 0 ]; then
             echo "未找到任何 QQbot_* 目录"
             exit 1
         fi
         
-        for dir in "${BOT_DIRS[@]}"; do
-            remove_version_file "$dir"
-        done
+        # 先复制txt文件
+        copy_txt_files
         ;;
     "--restore")
         echo "开始执行还原操作..."
@@ -357,74 +464,69 @@ case "$1" in
         echo "还原操作完成"
         exit 0
         ;;
-    "--create-version")
-        echo "开始为所有QQbot文件夹创建version文件..."
-        BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
-        if [ ${#BOT_DIRS[@]} -eq 0 ]; then
-            echo "未找到任何 QQbot_* 目录"
-            exit 1
-        fi
-        
-        for dir in "${BOT_DIRS[@]}"; do
-            create_version_file "$dir" "1"
-        done
-        echo "version文件创建完成"
-        exit 0
+    "--copy-txt")
+        echo "开始复制txt文件到所有QQbot目录..."
+        copy_txt_files
+        exit $?
         ;;
-    "--remove-version")
-        echo "开始删除所有QQbot文件夹的version文件..."
-        BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
-        if [ ${#BOT_DIRS[@]} -eq 0 ]; then
-            echo "未找到任何 QQbot_* 目录"
-            exit 1
-        fi
-        
-        for dir in "${BOT_DIRS[@]}"; do
-            remove_version_file "$dir"
-        done
-        echo "version文件删除完成"
-        exit 0
+    "--copy-overwrite")
+        echo "开始复制并覆盖文件操作..."
+        copy_and_overwrite_files
+        exit $?
         ;;
-    "--update-port")
-        echo "开始自动更新所有QQbot文件夹端口号..."
-        BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
-        if [ ${#BOT_DIRS[@]} -eq 0 ]; then
-            echo "未找到任何 QQbot_* 目录"
+    "--modify-single")
+        if [[ -z "$2" ]]; then
+            echo "错误: 必须指定要修改的目录路径"
             exit 1
         fi
         
-        counter=1
-        for dir in "${BOT_DIRS[@]}"; do
-            port=$((6069 + counter))
-            if [[ $counter -eq 1 ]]; then
-                port=6099
-            fi
-            rename_dir_with_port "$dir" "$port"
-            ((counter++))
-        done
-        echo "端口号更新完成"
-        exit 0
+        if [[ ! -d "$2" ]]; then
+            echo "错误: 目录不存在: $2"
+            exit 1
+        fi
+        
+        echo "开始修改单个目录: $2"
+        BOT_DIRS=("$2")
+        
+        # 复制txt文件到指定目录
+        copy_txt_files_single "$2"
         ;;
     *)
         show_help
         ;;
 esac
 
-# 查找所有以 QQbot_ 开头的文件夹
-BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+    # 查找所有以 QQbot_ 开头的文件夹
+    BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
 
-# 检查是否找到任何目录
-if [ ${#BOT_DIRS[@]} -eq 0 ]; then
-    echo "未找到任何 QQbot_* 目录"
-    exit 1
-fi
+    # 检查是否找到任何目录
+    if [ ${#BOT_DIRS[@]} -eq 0 ]; then
+        echo "未找到任何 QQbot_* 目录"
+        exit 1
+    fi
 
-# 初始化计数器
-counter=1
-success_count=0
-fail_count=0
+    # 初始化计数器
+    counter=1
+    success_count=0
+    fail_count=0
 
-echo "开始处理 ${#BOT_DIRS[@]} 个目录..."
+    echo "开始处理 ${#BOT_DIRS[@]} 个目录..."
+
+    # 处理onebot11.json文件重命名
+    for dir in "${BOT_DIRS[@]}"; do
+        local qq=$(extract_qq_from_dir "$dir")
+        if [[ -z "$qq" ]]; then
+            echo "无法从文件夹名提取QQ号: $(basename "$dir")"
+            continue
+        fi
+        
+        rename_onebot11_json "$dir" "$qq"
+        if [[ $? -eq 0 ]]; then
+            ((success_count++))
+        else
+            ((fail_count++))
+        fi
+    done
 
 # 遍历所有找到的 QQbot 文件夹
 for dir in "${BOT_DIRS[@]}"; do
@@ -433,22 +535,4 @@ for dir in "${BOT_DIRS[@]}"; do
     ((counter++))
 done
 
-    # 为所有文件夹创建新的version文件
-    # 先确保删除所有旧的.version文件
-    for dir in "${BOT_DIRS[@]}"; do
-        remove_version_file "$dir"
-    done
-
-    counter=1
-    for dir in "${BOT_DIRS[@]}"; do
-        version_file="$dir/${counter}.version"
-        echo "$counter" > "$version_file"
-        if [[ -f "$version_file" ]]; then
-            echo "成功创建version文件: $version_file"
-        else
-            echo "创建version文件失败: $version_file"
-        fi
-        ((counter++))
-    done
-
-    echo "配置修改完成! 成功: $success_count, 失败: $fail_count"
+echo "配置修改完成! 成功: $success_count, 失败: $fail_count"

@@ -172,3 +172,6 @@ local_model
 *.pkl
 study/
 .aider*
+*.tar
+napcat.json
+webui.json
