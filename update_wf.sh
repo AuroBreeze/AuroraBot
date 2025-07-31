@@ -144,7 +144,7 @@ extract_qq_from_dir() {
     echo "$qq"
 }
 
-# 重命名onebot11.json文件并备份
+# 处理onebot11.json文件
 rename_onebot11_json() {
     local dir="$1"
     local qq="$2"
@@ -157,17 +157,17 @@ rename_onebot11_json() {
         return 1
     fi
     
-    # 备份原文件
+    # 创建备份文件
     cp "$json_file" "$json_file.bak"
-    echo "已备份onebot11.json: $json_file.bak"
+    echo "已创建备份文件: $json_file.bak"
     
-    # 重命名文件
-    mv "$json_file" "$new_name"
+    # 创建重命名副本文件
+    cp "$json_file" "$new_name"
     if [[ $? -eq 0 ]]; then
-        echo "成功重命名onebot11.json为: $new_name"
+        echo "已创建重命名副本: $new_name"
         return 0
     else
-        echo "重命名失败: $json_file -> $new_name"
+        echo "创建重命名副本失败: $new_name"
         return 1
     fi
 }
@@ -321,17 +321,9 @@ restore_configs() {
     
     # 还原onebot11.json
     local json_backup="$dir/config/nt_config/onebot11.json.bak"
-    local json_files=($(find "$dir/config/nt_config" -maxdepth 1 -type f -name 'onebot11_*.json'))
     if [[ -f "$json_backup" ]]; then
-        rm -f "$dir/config/nt_config/onebot11.json" 2>/dev/null
-        mv "$json_backup" "$dir/config/nt_config/onebot11.json"
-        echo "已还原onebot11.json: $dir/config/nt_config/onebot11.json"
-        
-        # 删除重命名后的文件
-        for json_file in "${json_files[@]}"; do
-            rm -f "$json_file"
-            echo "已删除重命名文件: $json_file"
-        done
+        cp "$json_backup" "$dir/config/nt_config/onebot11.json"
+        echo "已从备份恢复onebot11.json"
     fi
     
     # 删除复制的txt文件
