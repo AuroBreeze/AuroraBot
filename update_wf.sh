@@ -135,6 +135,41 @@ extract_port_from_dir() {
     echo "${port:-6099}"  # 默认返回6099如果提取不到端口号
 }
 
+# 从文件夹名提取QQ号
+extract_qq_from_dir() {
+    local dir="$1"
+    local qq=$(basename "$dir" | grep -oE 'QQbot_([0-9]+)' | cut -d'_' -f2)
+    echo "$qq"
+}
+
+# 重命名onebot11.json文件并备份
+rename_onebot11_json() {
+    local dir="$1"
+    local qq="$2"
+    
+    local json_file="$dir/config/nt_config/onebot11.json"
+    local new_name="$dir/config/nt_config/onebot11_${qq}.json"
+    
+    if [[ ! -f "$json_file" ]]; then
+        echo "onebot11.json文件不存在: $json_file"
+        return 1
+    fi
+    
+    # 备份原文件
+    cp "$json_file" "$json_file.bak"
+    echo "已备份onebot11.json: $json_file.bak"
+    
+    # 重命名文件
+    mv "$json_file" "$new_name"
+    if [[ $? -eq 0 ]]; then
+        echo "成功重命名onebot11.json为: $new_name"
+        return 0
+    else
+        echo "重命名失败: $json_file -> $new_name"
+        return 1
+    fi
+}
+
 # 验证文件夹端口号命名是否有效
 validate_port_in_dirname() {
     local dir="$1"
@@ -270,6 +305,21 @@ restore_configs() {
         rm -f "$dir/config/environment/prod.py"
         mv "$dir/config/environment/prod.py.bak" "$dir/config/environment/prod.py"
         echo "已还原prod.py: $dir/config/environment/prod.py"
+    fi
+    
+    # 还原onebot11.json
+    local json_backup="$dir/config/nt_config/onebot11.json.bak"
+    local json_files=($(find "$dir/config/nt_config" -maxdepth 1 -type f -name 'onebot11_*.json'))
+    if [[ -f "$json_backup" ]]; then
+        rm -f "$dir/config/nt_config/onebot11.json" 2>/dev/null
+        mv "$json_backup" "$dir/config/nt_config/onebot11.json"
+        echo "已还原onebot11.json: $dir/config/nt_config/onebot11.json"
+        
+        # 删除重命名后的文件
+        for json_file in "${json_files[@]}"; do
+            rm -f "$json_file"
+            echo "已删除重命名文件: $json_file"
+        done
     fi
     
     # 删除复制的txt文件
@@ -446,21 +496,37 @@ case "$1" in
         ;;
 esac
 
-# 查找所有以 QQbot_ 开头的文件夹
-BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
+    # 查找所有以 QQbot_ 开头的文件夹
+    BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
 
-# 检查是否找到任何目录
-if [ ${#BOT_DIRS[@]} -eq 0 ]; then
-    echo "未找到任何 QQbot_* 目录"
-    exit 1
-fi
+    # 检查是否找到任何目录
+    if [ ${#BOT_DIRS[@]} -eq 0 ]; then
+        echo "未找到任何 QQbot_* 目录"
+        exit 1
+    fi
 
-# 初始化计数器
-counter=1
-success_count=0
-fail_count=0
+    # 初始化计数器
+    counter=1
+    success_count=0
+    fail_count=0
 
-echo "开始处理 ${#BOT_DIRS[@]} 个目录..."
+    echo "开始处理 ${#BOT_DIRS[@]} 个目录..."
+
+    # 处理onebot11.json文件重命名
+    for dir in "${BOT_DIRS[@]}"; do
+        local qq=$(extract_qq_from_dir "$dir")
+        if [[ -z "$qq" ]]; then
+            echo "无法从文件夹名提取QQ号: $(basename "$dir")"
+            continue
+        fi
+        
+        rename_onebot11_json "$dir" "$qq"
+        if [[ $? -eq 0 ]]; then
+            ((success_count++))
+        else
+            ((fail_count++))
+        fi
+    done
 
 # 遍历所有找到的 QQbot 文件夹
 for dir in "${BOT_DIRS[@]}"; do
