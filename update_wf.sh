@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# 设置工作目录
 WORK_DIR="/home"
 
 # 修改command.py函数
@@ -131,14 +130,17 @@ modify_prod_py() {
 # 从文件夹名提取端口号
 extract_port_from_dir() {
     local dir="$1"
-    local port=$(basename "$dir" | grep -oE '[0-9]{4}$')
+    local port=$(basename "$dir" | grep -oE 'QQbot_[0-9]+_([0-9]{4})' | cut -d'_' -f3)
     echo "${port:-6099}"  # 默认返回6099如果提取不到端口号
 }
 
 # 从文件夹名提取QQ号
 extract_qq_from_dir() {
     local dir="$1"
-    local qq=$(basename "$dir" | grep -oE 'QQbot_([0-9]+)' | cut -d'_' -f2)
+    local qq=$(basename "$dir" | grep -oE 'QQbot_([0-9]{5,13})_' | cut -d'_' -f2)
+    if [[ -z "$qq" ]]; then
+        qq=$(basename "$dir" | grep -oE 'QQbot_([0-9]{5,13})' | cut -d'_' -f2)
+    fi
     echo "$qq"
 }
 
@@ -250,6 +252,11 @@ modify_configs() {
     local new_command2="更换头像$port"
 
     if [[ -f "$target_file" ]]; then
+        # 确保生成备份文件
+        if [[ ! -f "$target_file.bak" ]]; then
+            cp "$target_file" "$target_file.bak"
+            echo "已创建备份文件: $target_file.bak"
+        fi
         modify_command_py "$target_file" "$old_command1" "$new_command1" "$old_command2" "$new_command2"
         case $? in
             0) ((success_count++)) ;;
@@ -261,6 +268,11 @@ modify_configs() {
     fi
 
     if [[ -f "$docker_file" ]]; then
+        # 确保生成备份文件
+        if [[ ! -f "$docker_file.bak" ]]; then
+            cp "$docker_file" "$docker_file.bak"
+            echo "已创建备份文件: $docker_file.bak"
+        fi
         local port=$(extract_port_from_dir "$dir")
         modify_docker_compose "$docker_file" "$new_container_name" "$new_service_name" "$new_app_name" "$port"
         if [[ $? -eq 0 ]]; then
@@ -496,6 +508,7 @@ case "$1" in
         ;;
 esac
 
+main() {
     # 查找所有以 QQbot_ 开头的文件夹
     BOT_DIRS=($(find "$WORK_DIR" -maxdepth 1 -type d -name 'QQbot_*' | sort))
 
@@ -528,11 +541,15 @@ esac
         fi
     done
 
-# 遍历所有找到的 QQbot 文件夹
-for dir in "${BOT_DIRS[@]}"; do
-    echo "正在检查: $(basename "$dir")"
-    modify_configs "$dir" "$counter" "$success_count" "$fail_count"
-    ((counter++))
-done
+    # 遍历所有找到的 QQbot 文件夹
+    for dir in "${BOT_DIRS[@]}"; do
+        echo "正在检查: $(basename "$dir")"
+        modify_configs "$dir" "$counter" "$success_count" "$fail_count"
+        ((counter++))
+    done
 
-echo "配置修改完成! 成功: $success_count, 失败: $fail_count"
+    echo "配置修改完成! 成功: $success_count, 失败: $fail_count"
+}
+
+# 调用主函数
+main
