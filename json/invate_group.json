@@ -1,0 +1,29 @@
+{
+    "self_id": 2959259482,
+    "user_id": 3284039334,
+    "time": 1753422892,
+    "message_id": 672284077,
+    "message_seq": 672284077,
+    "real_id": 672284077,
+    "real_seq": "7905",
+    "message_type": "private",
+    "sender": {
+        "user_id": 3284039334,
+        "nickname": "疑心病",
+        "card": ""
+    },
+    "raw_message": "[CQ:json,data={\"app\":\"com.tencent.qun.invite\"&#44;\"config\":{\"autosize\":0&#44;\"ctime\":1753422892&#44;\"round\":1&#44;\"token\":\"51e487d99dd9165107208409cdf000f3\"&#44;\"type\":\"normal\"}&#44;\"meta\":{\"news\":{\"desc\":\"邀请你加入群聊“棋子の键盘小窝(买一赠一)”，进入可查看详情。\"&#44;\"jumpUrl\":\"mqqapi://group/invite_join?src_type=internal&amp;version=1&amp;groupcode=461617667&amp;msgseq=1753422892401100&amp;groupname=%e6%a3%8b%e5%ad%90%e3%81%ae%e9%94%ae%e7%9b%98%e5%b0%8f%e7%aa%9d%28%e4%b9%b0%e4%b8%80%e8%b5%a0%e4%b8%80%29&amp;senderuin=3284039334&amp;receiveruin=2959259482\"&#44;\"preview\":\"https://p.qlogo.cn/gh/461617667/461617667/?t=1753422892\"&#44;\"tag\":\"邀请加群\"&#44;\"tagIcon\":\"https://downv6.qq.com/innovate/group_ark_icon.png\"&#44;\"title\":\"邀请你加入群聊\"}}&#44;\"prompt\":\"邀请加群\"&#44;\"ver\":\"1.0.0.31\"&#44;\"view\":\"news\"}\n]",
+    "font": 14,
+    "sub_type": "friend",
+    "message": [
+        {
+            "type": "json",
+            "data": {
+                "data": "{\"app\":\"com.tencent.qun.invite\",\"config\":{\"autosize\":0,\"ctime\":1753422892,\"round\":1,\"token\":\"51e487d99dd9165107208409cdf000f3\",\"type\":\"normal\"},\"meta\":{\"news\":{\"desc\":\"邀请你加入群聊“棋子の键盘小窝(买一赠一)”，进入可查看详情。\",\"jumpUrl\":\"mqqapi://group/invite_join?src_type=internal&version=1&groupcode=461617667&msgseq=1753422892401100&groupname=%e6%a3%8b%e5%ad%90%e3%81%ae%e9%94%ae%e7%9b%98%e5%b0%8f%e7%aa%9d%28%e4%b9%b0%e4%b8%80%e8%b5%a0%e4%b8%80%29&senderuin=3284039334&receiveruin=2959259482\",\"preview\":\"https://p.qlogo.cn/gh/461617667/461617667/?t=1753422892\",\"tag\":\"邀请加群\",\"tagIcon\":\"https://downv6.qq.com/innovate/group_ark_icon.png\",\"title\":\"邀请你加入群聊\"}},\"prompt\":\"邀请加群\",\"ver\":\"1.0.0.31\",\"view\":\"news\"}\n"
+            }
+        }
+    ],
+    "message_format": "array",
+    "post_type": "message",
+    "target_id": 3284039334
+}
