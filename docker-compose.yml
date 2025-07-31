@@ -7,12 +7,23 @@ services:
             - 3001:3001
             - 6099:6099
         container_name: Bot
-        restart: always
+        # tmpfs:
+        #     - /app/nt_db:rw,size=128m
+        # logging:
+        #     driver: "json-file"
+        #     options:
+        #         max-size: "10m"
+        #         max-file: "1"
+        # restart: unless-stopped
+
+        volumes:
+            - ./config/nt_config:/app/napcat/config
+        
         image: mlikiowa/napcat-docker:latest
-    app:
-        build: .
-        restart: always
-        container_name: AuroraBot
-        depends_on:
-            - aurorabot
-        image: aurora-bot:latest
+    # app:
+    #     build: .
+    #     restart: always
+    #     container_name: AuroraBot
+    #     depends_on:
+    #         - aurorabot
+    #     image: aurora-bot:latest
