@@ -82,8 +82,14 @@ modify_docker_compose() {
     if grep -q "${port}:6099" "$file"; then
         port_matched=1
     fi
-    if grep -q "ACCOUNT=[0-9]\+" "$file"; then
+    local qq=$(extract_qq_from_dir "$(dirname "$file")")
+    local current_account=$(grep -o "ACCOUNT=[0-9]\+" "$file" | cut -d'=' -f2)
+    
+    # 验证ACCOUNT是否匹配文件夹QQ号
+    if [[ -n "$qq" && -n "$current_account" && "$current_account" == "$qq" ]]; then
         account_matched=1
+    elif [[ -n "$current_account" ]]; then
+        echo "发现不匹配的ACCOUNT值: $current_account (应为: $qq)"
     fi
 
     if [[ $container_matched -eq 1 && $service_matched -eq 1 && $app_matched -eq 1 && $port_matched -eq 1 && $account_matched -eq 1 ]]; then
@@ -92,20 +98,22 @@ modify_docker_compose() {
     fi
     
     cp "$file" "$file.bak"
-    sed -i "s/container_name: Bot/container_name: $container_name/" "$file"
-    sed -i "s/aurorabot:/"$service_name:"/" "$file"
-    sed -i "s/container_name: AuroraBot/container_name: $app_name/" "$file"
-    sed -i "s/- aurorabot/- $service_name/" "$file"
-    sed -i "s/- 6099:6099/- ${port}:6099/" "$file"
+    # 修改容器名称和服务名称（确保不重复添加端口号）
+    sed -i "s/container_name: Bot[0-9_]*/container_name: Bot_$port/" "$file"
+    sed -i "s/aurorabot[0-9_]*:/aurorabot_$port:/" "$file"
+    sed -i "s/container_name: AuroraBot[0-9_]*/container_name: AuroraBot_$port/" "$file"
+    sed -i "s/- aurorabot[0-9_]*/- aurorabot_$port/" "$file"
+    sed -i "s/- [0-9]\+:6099/- ${port}:6099/" "$file"
+    # 修复depends_on引用
+    sed -i "s/depends_on:\n      - aurorabot[0-9_]*/depends_on:\n      - aurorabot_$port/" "$file"
     
-    # 修改ACCOUNT变量
+    # 修改ACCOUNT变量 - 先删除所有ACCOUNT行，再添加正确的配置
     local qq=$(extract_qq_from_dir "$(dirname "$file")")
     if [[ -n "$qq" ]]; then
-        if [[ $account_matched -eq 1 ]]; then
-            sed -i "s/ACCOUNT=[0-9]\+/ACCOUNT=$qq/" "$file"
-        else
-            sed -i "/environment:/a \      - ACCOUNT=$qq" "$file"
-        fi
+        # 删除所有现有的ACCOUNT配置
+        sed -i "/ACCOUNT=[0-9]\+/d" "$file"
+        # 添加新的ACCOUNT配置
+        sed -i "/environment:/a \      - ACCOUNT=$qq" "$file"
     fi
     
     if grep -q "$container_name\|$service_name\|$app_name" "$file" && grep -q "${port}:6099" "$file"; then
@@ -218,7 +226,18 @@ need_modify() {
     local dir="$1"
     local counter="$2"
 
-    # 先验证文件夹命名
+    # 首先验证docker-compose.yml中的ACCOUNT
+    local docker_file="$dir/docker-compose.yml"
+    if [[ -f "$docker_file" ]]; then
+        local qq=$(extract_qq_from_dir "$dir")
+        local current_account=$(grep -o "ACCOUNT=[0-9]\+" "$docker_file" | cut -d'=' -f2)
+        if [[ -n "$qq" && -n "$current_account" && "$current_account" != "$qq" ]]; then
+            echo "ACCOUNT不匹配: $current_account (应为: $qq)"
+            return 0
+        fi
+    fi
+
+    # 验证文件夹命名
     if ! validate_port_in_dirname "$dir"; then
         return 1
     fi
@@ -511,6 +530,12 @@ case "$1" in
         
         # 复制txt文件到指定目录
         copy_txt_files_single "$2"
+        
+        # 修改配置文件
+        counter=1
+        success_count=0
+        fail_count=0
+        modify_configs "$2" "$counter" "$success_count" "$fail_count"
         ;;
     *)
         show_help
