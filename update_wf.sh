@@ -68,6 +68,7 @@ modify_docker_compose() {
     local service_matched=0
     local app_matched=0
     local port_matched=0
+    local account_matched=0
 
     if grep -q "container_name: $container_name" "$file"; then
         container_matched=1
@@ -81,8 +82,11 @@ modify_docker_compose() {
     if grep -q "${port}:6099" "$file"; then
         port_matched=1
     fi
+    if grep -q "ACCOUNT=[0-9]\+" "$file"; then
+        account_matched=1
+    fi
 
-    if [[ $container_matched -eq 1 && $service_matched -eq 1 && $app_matched -eq 1 && $port_matched -eq 1 ]]; then
+    if [[ $container_matched -eq 1 && $service_matched -eq 1 && $app_matched -eq 1 && $port_matched -eq 1 && $account_matched -eq 1 ]]; then
         echo "docker-compose.yml已包含所有新配置，跳过修改"
         return 1
     fi
@@ -94,7 +98,20 @@ modify_docker_compose() {
     sed -i "s/- aurorabot/- $service_name/" "$file"
     sed -i "s/- 6099:6099/- ${port}:6099/" "$file"
     
+    # 修改ACCOUNT变量
+    local qq=$(extract_qq_from_dir "$(dirname "$file")")
+    if [[ -n "$qq" ]]; then
+        if [[ $account_matched -eq 1 ]]; then
+            sed -i "s/ACCOUNT=[0-9]\+/ACCOUNT=$qq/" "$file"
+        else
+            sed -i "/environment:/a \      - ACCOUNT=$qq" "$file"
+        fi
+    fi
+    
     if grep -q "$container_name\|$service_name\|$app_name" "$file" && grep -q "${port}:6099" "$file"; then
+        if [[ -n "$qq" ]]; then
+            grep -q "ACCOUNT=$qq" "$file" || { echo "ACCOUNT修改失败"; return 2; }
+        fi
         echo "成功修改docker-compose.yml: $container_name、$service_name、$app_name 和端口 $port"
         return 0
     else
