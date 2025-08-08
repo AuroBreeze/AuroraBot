@@ -9,6 +9,7 @@ import os
 from config.env import QQ_ADMIN
 
 DEFAULT_ROOT = os.path.normpath('./store/downloads')
+DEFAULT_ROOT_SET: bool = False  # 是否由管理员主动设置过默认根目录
 
 # 运行时状态（内存）
 group_download_dirs: dict[str, str] = {}

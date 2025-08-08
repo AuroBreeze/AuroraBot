@@ -171,6 +171,7 @@ class FileDownloader:
             target = os.path.normpath(new_root)
             os.makedirs(target, exist_ok=True)
             fd_cfg.DEFAULT_ROOT = target
+            fd_cfg.DEFAULT_ROOT_SET = True
             self.logger.info(f"已设置全局默认下载根目录: {fd_cfg.DEFAULT_ROOT}")
         except Exception as e:
             self.logger.error(f"设置默认下载目录失败: {e}")
@@ -209,10 +210,16 @@ class FileDownloader:
         if not url:
             return False, None
 
-        # 解析群目录（若未设置则使用默认根目录下的 group_<group_id>）
+        # 解析群目录：
+        # - 若该群有自定义目录，直接使用该目录
+        # - 若管理员设置了默认根目录(DEFAULT_ROOT_SET=True)，则不再为每个群创建子目录，直接下载到默认根目录
+        # - 否则使用默认根目录下的 group_<group_id>/ 子目录
         target_root = fd_cfg.group_download_dirs.get(str(group_id))
         if not target_root:
-            target_root = os.path.join(fd_cfg.DEFAULT_ROOT, f"group_{group_id}")
+            if getattr(fd_cfg, 'DEFAULT_ROOT_SET', False):
+                target_root = fd_cfg.DEFAULT_ROOT
+            else:
+                target_root = os.path.join(fd_cfg.DEFAULT_ROOT, f"group_{group_id}")
         os.makedirs(target_root, exist_ok=True)
 
         # 生成文件名：优先使用消息中携带的文件名；若缺失，尝试从 ./json/file.json 读取；不主动加时间戳，除非发生重名冲突
