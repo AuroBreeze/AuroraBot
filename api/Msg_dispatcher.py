@@ -21,9 +21,9 @@ class Msg_dispatcher:
     """
     async def handle_event(self, websocket, message): # 事件处理器(功能注册处)
         # await self.Learn_clock(websocket, message)
-        await self.Lssuing(websocket, message)
+        # await self.Lssuing(websocket, message)
         # await self.Commodity_lssuing(websocket, message)
-        await self.Proxy_talk(websocket, message)
+        # await self.Proxy_talk(websocket, message)
         await self.File_downloader(websocket, message)
     # async def Learn_clock(self, websocket, message):
     #     try:

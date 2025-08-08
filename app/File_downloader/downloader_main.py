@@ -8,6 +8,7 @@ from typing import Tuple, Optional
 
 from api.Logger_owner import Logger
 from . import config as fd_cfg
+from api.Botapi import QQAPI_list
 
 
 class FileDownloader:
@@ -37,8 +38,28 @@ class FileDownloader:
             if not group_id:
                 return
 
+            # 管理员菜单：展示文件收录功能菜单
+            if raw_msg in ("#fd menu", "菜单", "FD菜单") and fd_cfg.is_admin(user_id):
+                menu_text = (
+                    "[FileDownloader 菜单]\n"
+                    "1) 设置群下载目录 <路径>  或  #gsetdir <path>  [管理员]\n"
+                    "2) 设置默认根目录 <路径>  或  #fd setroot <path>  [管理员]\n"
+                    "3) 开启下载 / 关闭下载  或  #fd on / #fd off  [管理员]\n"
+                    "4) 自动静默收录群内图片/文件到本地目录（非阻塞）\n"
+                    "5) 仅处理群聊消息；设置目录/开关/根目录仅管理员可用\n"
+                    f"当前状态: {'已开启' if fd_cfg.DOWNLOAD_ENABLED else '已关闭'}\n"
+                )
+                try:
+                    await QQAPI_list(self.websocket).send_group_message(group_id, menu_text)
+                except Exception:
+                    pass
+                return
+
             # 0) 管理员控制总开关（保留，不回消息）
             await self.toggle_global_switch(user_id, raw_msg)
+
+            # 0.5) 管理员设置全局默认根目录（影响未自定义目录的群）
+            await self.set_default_root_dir(user_id, raw_msg)
 
             # 1) 设置群下载目录（仅管理员，静默）
             await self.set_group_download_dir(user_id, group_id, raw_msg)
@@ -122,6 +143,37 @@ class FileDownloader:
             fd_cfg.DOWNLOAD_ENABLED = False
             self.logger.info("全局自动下载：关闭")
             return None
+
+    async def set_default_root_dir(self, user_id: str, raw_msg: str) -> None:
+        """
+        仅管理员：设置全局默认下载根目录（影响所有未单独设置目录的群）
+        指令：
+        - 设置默认下载目录 <path>
+        - 设置默认根目录 <path>
+        - #fd setroot <path>
+        静默执行，不回消息
+        """
+        if not raw_msg:
+            return
+        if not fd_cfg.is_admin(str(user_id)):
+            return
+        prefixes = ("设置默认下载目录 ", "设置默认根目录 ", "#fd setroot ")
+        matched = None
+        for p in prefixes:
+            if raw_msg.startswith(p):
+                matched = raw_msg[len(p):].strip().strip('"')
+                break
+        if not matched:
+            return
+        new_root = matched
+        # 允许绝对或相对路径；相对路径保持相对项目根
+        try:
+            target = os.path.normpath(new_root)
+            os.makedirs(target, exist_ok=True)
+            fd_cfg.DEFAULT_ROOT = target
+            self.logger.info(f"已设置全局默认下载根目录: {fd_cfg.DEFAULT_ROOT}")
+        except Exception as e:
+            self.logger.error(f"设置默认下载目录失败: {e}")
 
     async def try_download_incoming(self, user_id: str, group_id: str, force: bool = False) -> Tuple[bool, Optional[str]]:
         """
