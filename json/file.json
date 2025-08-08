@@ -1,11 +1,11 @@
 {
     "self_id": 3552638520,
     "user_id": 1732373074,
-    "time": 1752995987,
-    "message_id": 946657179,
-    "message_seq": 946657179,
-    "real_id": 946657179,
-    "real_seq": "6613",
+    "time": 1754620163,
+    "message_id": 994546116,
+    "message_seq": 994546116,
+    "real_id": 994546116,
+    "real_seq": "8434",
     "message_type": "group",
     "sender": {
         "user_id": 1732373074,
@@ -13,7 +13,7 @@
         "card": "AuroBreeze",
         "role": "owner"
     },
-    "raw_message": "[CQ:file,file=123.txt,file_id=/6b3bcc32-e94b-40f2-9541-5a054faedda6,file_size=13,url=https://tjc-download.ftn.qq.com/ftn_handler/2e264eddfe55051ba8306d4fcb02488a1cb1ddcc03c45a659459eb05dd3fd16a830e7e3c1e19f54fad21f868618dfde0657c1bac908383f0ce2e8d2ddd6d7bdb/?fname=]",
+    "raw_message": "[CQ:file,file=123.txt,file_id=/ec12b95d-e46d-4e54-9cae-32c3e3adce46,file_size=6,url=https://gyc-download.ftn.qq.com/ftn_handler/130eb64afd98f03256c3b9ceb058328d86e1bf6a2453cda95b4adff30de994ecf603c4ab419f7bb952226137838d59ca63e5132737bf7b72033fe3adb1c33b08/?fname=]",
     "font": 14,
     "sub_type": "normal",
     "message": [
@@ -21,9 +21,9 @@
             "type": "file",
             "data": {
                 "file": "123.txt",
-                "file_id": "/6b3bcc32-e94b-40f2-9541-5a054faedda6",
-                "file_size": "13",
-                "url": "https://tjc-download.ftn.qq.com/ftn_handler/2e264eddfe55051ba8306d4fcb02488a1cb1ddcc03c45a659459eb05dd3fd16a830e7e3c1e19f54fad21f868618dfde0657c1bac908383f0ce2e8d2ddd6d7bdb/?fname="
+                "file_id": "/ec12b95d-e46d-4e54-9cae-32c3e3adce46",
+                "file_size": "6",
+                "url": "https://gyc-download.ftn.qq.com/ftn_handler/130eb64afd98f03256c3b9ceb058328d86e1bf6a2453cda95b4adff30de994ecf603c4ab419f7bb952226137838d59ca63e5132737bf7b72033fe3adb1c33b08/?fname="
             }
         }
     ],

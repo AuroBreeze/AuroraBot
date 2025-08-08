@@ -23,10 +23,10 @@ services:
         max-file: "1"
 
     restart: unless-stopped
-  app:
-    build: .
-    image: aurora-bot:latest
-    container_name: AuroraBot
-    restart: always
-    depends_on:
-      - aurorabot
+  # app:
+  #   build: .
+  #   image: aurora-bot:latest
+  #   container_name: AuroraBot
+  #   restart: always
+  #   depends_on:
+  #     - aurorabot

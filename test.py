@@ -158,8 +158,29 @@
     
 #     plt.show()
 
+import requests
 
-import re
-raw_msg = '[CQ:at,qq=3014617667] 3'
-match = re.search(r'\[CQ:at,qq=(\d+)\] 3', raw_msg)
-print(match.group(1))
+requests = requests.Session()
+
+# 获取cookie并允许跳转
+cookies = requests.get("http://127.0.0.1:6099/webui?token=napcat", allow_redirects=True)
+print("Initial response:", cookies.text)
+print("Cookies:", cookies.cookies)
+print("Redirect history:", cookies.history)  # 打印重定向历史
+
+url = "http://127.0.0.1:6099/api/QQLogin/CheckLoginStatus"
+headers = {
+    "Content-Type": "application/json"
+}
+# http://127.0.0.1:6099/api/auth/login
+# 发送POST请求并允许跳转
+response = requests.post(url, headers=headers, allow_redirects=True)
+print("Final response:", response.json())
+print("Redirect history:", response.history)  # 打印重定向历史
+
+# 如果需要手动处理重定向
+if response.history:
+    print("\n重定向路径:")
+    for resp in response.history:
+        print(resp.status_code, resp.url)
+    print("最终URL:", response.url)
