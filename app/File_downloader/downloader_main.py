@@ -25,7 +25,7 @@ class FileDownloader:
         """
         try:
             # 示例：读取 app 其他目录（演示跨模块导入/读取）
-            self.example_read_other_app()
+            # self.example_read_other_app()
 
             raw_msg = str(self.message.get('raw_message', '')).strip()
             group_id = str(self.message.get('group_id', ''))
@@ -72,19 +72,6 @@ class FileDownloader:
             traceback.print_exc()
             self.logger.error(f"FileDownloader 处理异常: {e}")
 
-    def example_read_other_app(self):
-        """
-        示例：读取 app 其他目录的内容（安全演示，不依赖其存在的具体变量）
-        - 尝试导入 `app.Proxy_talk.proxy_cfg` 并读取其属性名列表
-        仅做日志演示，不影响主流程
-        """
-        try:
-            from app.Proxy_talk import proxy_cfg  # 跨目录读取示例
-            attrs = dir(proxy_cfg)
-            self.logger.debug(f"跨目录读取示例: 已读取 proxy_cfg 中 {len(attrs)} 个属性")
-        except Exception as _:
-            # 不影响主流程
-            pass
 
     async def set_group_download_dir(self, user_id: str, group_id: str, raw_msg: str) -> None:
         """
@@ -120,6 +107,11 @@ class FileDownloader:
             os.makedirs(target_dir, exist_ok=True)
             fd_cfg.group_download_dirs[str(group_id)] = target_dir
             self.logger.info(f"为群{group_id}设置下载目录: {target_dir}")
+            # 管理员提示
+            try:
+                await QQAPI_list(self.websocket).send_group_message(group_id, f"[FileDownloader] 已设置本群下载目录为:\n{target_dir}")
+            except Exception:
+                pass
         except Exception as e:
             self.logger.error(f"创建目录失败: {e}")
 
@@ -138,10 +130,22 @@ class FileDownloader:
         if raw_msg in ("开启下载", "#fd on"):
             fd_cfg.DOWNLOAD_ENABLED = True
             self.logger.info("全局自动下载：开启")
+            # 管理员提示
+            try:
+                group_id = str(self.message.get('group_id', ''))
+                await QQAPI_list(self.websocket).send_group_message(group_id, "[FileDownloader] 已开启自动下载")
+            except Exception:
+                pass
             return None
         else:
             fd_cfg.DOWNLOAD_ENABLED = False
             self.logger.info("全局自动下载：关闭")
+            # 管理员提示
+            try:
+                group_id = str(self.message.get('group_id', ''))
+                await QQAPI_list(self.websocket).send_group_message(group_id, "[FileDownloader] 已关闭自动下载")
+            except Exception:
+                pass
             return None
 
     async def set_default_root_dir(self, user_id: str, raw_msg: str) -> None:
@@ -173,6 +177,12 @@ class FileDownloader:
             fd_cfg.DEFAULT_ROOT = target
             fd_cfg.DEFAULT_ROOT_SET = True
             self.logger.info(f"已设置全局默认下载根目录: {fd_cfg.DEFAULT_ROOT}")
+            # 管理员提示
+            try:
+                group_id = str(self.message.get('group_id', ''))
+                await QQAPI_list(self.websocket).send_group_message(group_id, f"[FileDownloader] 已设置默认根目录为:\n{fd_cfg.DEFAULT_ROOT}\n(未自定义目录的群将直接保存到该目录)")
+            except Exception:
+                pass
         except Exception as e:
             self.logger.error(f"设置默认下载目录失败: {e}")
 
