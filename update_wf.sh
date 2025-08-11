@@ -386,14 +386,37 @@ copy_and_overwrite_files() {
         return 1
     fi
 
-    echo "开始从 $source_dir 复制文件到所有QQbot目录并覆盖..."
+    echo "开始从 $source_dir 检查并替换已存在的同路径文件到所有QQbot目录..."
     
+    # 遍历源目录下所有文件（保留相对路径）
+    local IFS=$'\n'
+    local source_files=($(cd "$source_dir" && find . -type f | sed 's#^\./##'))
+    unset IFS
+
+    if [ ${#source_files[@]} -eq 0 ]; then
+        echo "源目录中未找到任何文件"
+        return 1
+    fi
+
     for bot_dir in "${bot_dirs[@]}"; do
         echo "正在处理: $bot_dir"
-        cp -rf "$source_dir"/* "$bot_dir"/
+        local replaced_count=0
+        local skipped_count=0
+        for rel_path in "${source_files[@]}"; do
+            local target_path="$bot_dir/$rel_path"
+            if [[ -f "$target_path" ]]; then
+                # 目标已存在对应文件，则覆盖
+                cp -f "$source_dir/$rel_path" "$target_path"
+                ((replaced_count++))
+            else
+                # 目标不存在对应文件，跳过（不创建新文件）
+                ((skipped_count++))
+            fi
+        done
+        echo "完成: 替换 $replaced_count 个文件，跳过 $skipped_count 个不存在的文件"
     done
     
-    echo "已完成 ${#bot_dirs[@]} 个QQbot目录的文件覆盖"
+    echo "已完成 ${#bot_dirs[@]} 个QQbot目录的选择性文件覆盖（仅替换已存在的同路径文件）"
     return 0
 }
 
@@ -404,7 +427,7 @@ show_help() {
     echo "  ./update_wf.sh --restore       执行配置还原"
     echo "  ./update_wf.sh --copy-txt           复制/home/txt下的txt文件到所有QQbot目录"
     echo "  ./update_wf.sh --modify-single [目录]  修改指定目录下的配置文件"
-    echo "  ./update_wf.sh --copy-overwrite     复制/home/new_use下的文件覆盖所有QQbot_*目录"
+    echo "  ./update_wf.sh --copy-overwrite     仅替换所有QQbot_*目录中已存在且与/home/new_use同路径的文件"
     echo ""
     echo "功能说明:"
     echo "  批量修改/还原QQbot配置文件"
