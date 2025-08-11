@@ -85,11 +85,13 @@ modify_docker_compose() {
     local qq=$(extract_qq_from_dir "$(dirname "$file")")
     local current_account=$(grep -o "ACCOUNT=[0-9]\+" "$file" | cut -d'=' -f2)
     
-    # 验证ACCOUNT是否匹配文件夹QQ号
-    if [[ -n "$qq" && -n "$current_account" && "$current_account" == "$qq" ]]; then
-        account_matched=1
-    elif [[ -n "$current_account" ]]; then
-        echo "发现不匹配的ACCOUNT值: $current_account (应为: $qq)"
+    # 验证ACCOUNT是否匹配（仅当能提取到QQ时才提示不匹配）
+    if [[ -n "$qq" && -n "$current_account" ]]; then
+        if [[ "$current_account" == "$qq" ]]; then
+            account_matched=1
+        else
+            echo "发现不匹配的ACCOUNT值: $current_account (应为: $qq)"
+        fi
     fi
 
     if [[ $container_matched -eq 1 && $service_matched -eq 1 && $app_matched -eq 1 && $port_matched -eq 1 && $account_matched -eq 1 ]]; then
@@ -152,20 +154,70 @@ modify_prod_py() {
     fi
 }
 
-# 从文件夹名提取端口号
+# 从文件夹名提取端口号（鲁棒版）
 extract_port_from_dir() {
     local dir="$1"
-    local port=$(basename "$dir" | grep -oE 'QQbot_[0-9]+_([0-9]{4})' | cut -d'_' -f3)
-    echo "${port:-6099}"  # 默认返回6099如果提取不到端口号
+    local name="$(basename "$dir")"
+    local port=""
+
+    # 1) 优先：目录名以 _NNNN 结尾
+    if [[ "$name" =~ _([0-9]{4})$ ]]; then
+        port="${BASH_REMATCH[1]}"
+    fi
+
+    # 2) 次选：目录名中任意片段包含 _NNNN 或 -NNNN，取最后一个匹配
+    if [[ -z "$port" ]]; then
+        port=$(echo "$name" | grep -oE '[_-]([0-9]{4})' | grep -oE '[0-9]{4}' | tail -n1)
+    fi
+
+    # 3) 再次尝试：从 docker-compose.yml 中提取
+    if [[ -z "$port" ]]; then
+        local compose="$dir/docker-compose.yml"
+        if [[ -f "$compose" ]]; then
+            # 3.1 从端口映射 NNNN:6099 提取
+            port=$(grep -oE '([0-9]{4}):6099' "$compose" | head -n1 | cut -d: -f1)
+            # 3.2 从 container_name: Bot_NNNN 提取
+            if [[ -z "$port" ]]; then
+                port=$(grep -oE 'container_name:[[:space:]]*Bot_([0-9]{4})' "$compose" | grep -oE '[0-9]{4}' | head -n1)
+            fi
+            # 3.3 从 service/app 名称 aurorabot_NNNN / AuroraBot_NNNN 提取
+            if [[ -z "$port" ]]; then
+                port=$(grep -oE '(aurorabot|AuroraBot)_([0-9]{4})' "$compose" | grep -oE '[0-9]{4}' | head -n1)
+            fi
+        fi
+    fi
+
+    # 4) 兜底：默认 6099
+    echo "${port:-6099}"
 }
 
 # 从文件夹名提取QQ号
 extract_qq_from_dir() {
     local dir="$1"
-    local qq=$(basename "$dir" | grep -oE 'QQbot_([0-9]{5,13})_' | cut -d'_' -f2)
-    if [[ -z "$qq" ]]; then
-        qq=$(basename "$dir" | grep -oE 'QQbot_([0-9]{5,13})' | cut -d'_' -f2)
+    local name="$(basename "$dir")"
+    local qq=""
+
+    # 1) 目录命名形如 QQbot_<qq>_<port>
+    if [[ "$name" =~ ^QQbot_([0-9]+)_[0-9]{4}$ ]]; then
+        qq="${BASH_REMATCH[1]}"
     fi
+
+    # 2) 若未获取，尝试 docker-compose.yml 中的 ACCOUNT
+    if [[ -z "$qq" && -f "$dir/docker-compose.yml" ]]; then
+        qq=$(grep -o "ACCOUNT=[0-9]\+" "$dir/docker-compose.yml" | head -n1 | cut -d'=' -f2)
+    fi
+
+    # 3) 若仍未获取，尝试 onebot11_<qq>.json 文件名
+    if [[ -z "$qq" ]]; then
+        local json_path="$dir/config/nt_config"
+        if [[ -d "$json_path" ]]; then
+            local fname=$(ls "$json_path" 2>/dev/null | grep -E '^onebot11_([0-9]{5,13})\.json$' | head -n1)
+            if [[ -n "$fname" ]]; then
+                qq=$(echo "$fname" | grep -oE '[0-9]{5,13}')
+            fi
+        fi
+    fi
+
     echo "$qq"
 }
 
