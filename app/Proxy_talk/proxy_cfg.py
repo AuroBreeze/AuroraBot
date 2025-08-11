@@ -21,6 +21,9 @@ group_name_timers: Dict[str, float] = {}  # 群名修改计时 {group_id: 剩余
 waiting_for_file = {} 
 waiting_for_avatar = {}  # 新增等待头像状态字典
 
+# 跟随@回复状态：每个群一份，记录目标QQ、要发送的行、当前索引等
+follow_talk_state: Dict[str, dict] = {}
+
 def get_active_tasks() -> Dict[str, asyncio.Task]:
     global active_tasks
     return active_tasks
@@ -28,3 +31,7 @@ def get_active_tasks() -> Dict[str, asyncio.Task]:
 def get_stop_flags() -> Dict[str, bool]:
     global stop_flags
     return stop_flags
+
+def get_follow_talk_state() -> Dict[str, dict]:
+    global follow_talk_state
+    return follow_talk_state

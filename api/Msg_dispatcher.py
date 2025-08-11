@@ -1,9 +1,9 @@
 import json
-from app.Lssuing.mandated import Mandated
+# from app.Lssuing.mandated import Mandated
 # from app.Learn_clock.clock_main import Clock_learn
-from app.Commodity_lssuing.manage import Manage
+# from app.Commodity_lssuing.manage import Manage
 from app.Proxy_talk.proxy_main import Proxy_talk
-from app.File_downloader.downloader_main import FileDownloader
+# from app.File_downloader.downloader_main import FileDownloader
 
 
 class Main_dispatcher_and_run:
@@ -23,8 +23,8 @@ class Msg_dispatcher:
         # await self.Learn_clock(websocket, message)
         # await self.Lssuing(websocket, message)
         # await self.Commodity_lssuing(websocket, message)
-        # await self.Proxy_talk(websocket, message)
-        await self.File_downloader(websocket, message)
+        await self.Proxy_talk(websocket, message)
+        # await self.File_downloader(websocket, message)
     # async def Learn_clock(self, websocket, message):
     #     try:
     #         if isinstance(message, str):
@@ -33,14 +33,14 @@ class Msg_dispatcher:
     #     except Exception as e:
     #         import traceback
     #         traceback.print_exc()
-    async def Lssuing(self, websocket, message):
-        try:
-            if isinstance(message, str):
-                message = json.loads(message)
-            await Mandated(websocket, message).handle_event()
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
+    # async def Lssuing(self, websocket, message):
+    #     try:
+    #         if isinstance(message, str):
+    #             message = json.loads(message)
+    #         await Mandated(websocket, message).handle_event()
+    #     except Exception as e:
+    #         import traceback
+    #         traceback.print_exc()
     # async def Commodity_lssuing(self, websocket, message):
     #     try:
     #         if isinstance(message, str):
@@ -54,16 +54,16 @@ class Msg_dispatcher:
         try:
             if isinstance(message, str):
                 message = json.loads(message)
-                await Proxy_talk(websocket, message).handle_event()
+            await Proxy_talk(websocket, message).handle_event()
         except Exception as e:
             import traceback
             traceback.print_exc()
 
-    async def File_downloader(self, websocket, message):
-        try:
-            if isinstance(message, str):
-                message = json.loads(message)
-            await FileDownloader(websocket, message).handle_event()
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
+    # async def File_downloader(self, websocket, message):
+    #     try:
+    #         if isinstance(message, str):
+    #             message = json.loads(message)
+    #         await FileDownloader(websocket, message).handle_event()
+    #     except Exception as e:
+    #         import traceback
+    #         traceback.print_exc()

@@ -26,6 +26,17 @@ class Command_API:
         excutor_id = str(self.message.get('user_id'))
 
 
+        # 放行通道：若为“跟随@”目标的发言，优先触发 at_talk 并直接返回，避免被全局校验拦截
+        try:
+            from ..proxy_cfg import get_follow_talk_state
+            state = get_follow_talk_state().get(group_id)
+            if state and str(excutor_id) == state.get('target'):
+                # 仅执行触发逻辑，不做其它命令处理
+                await self.api.at_talk(self.message, self.websocket)
+                return True, None
+        except Exception:
+            pass
+
         check_judge,check_msg = Auth().check_msg(self.message)
         if not check_judge:
             return False, check_msg
@@ -155,26 +166,26 @@ class Command:
 
         help_text = """
         71の                                                                                                                  
-  ┌── 1. 添加词汇 <词汇>              
-  ├── 2. 发送消息: 1                     
-  ├── 3. 添加间隔 <毫秒数>                 
-  ├── 4. 关闭发送: 2             
-  ├── 5. 停止所有: 4         
-  ├── 6*. 全局停止: 停止/0            
-  ├── 7*. @at 3                   
-  ├── 8*. 设置名称 <新群名>              
-  ├── 9*. 添加文件                      
-  ├── 10*.下载文件                   
-  ├── 11*.授权 <QQ号>                         
-  ├── 12*.取消授权 <QQ号>                      
-  ├── 13*.列出授权                         
-  ├── 14*.清空文件                         
+  ┌── 1. 添加词汇 <词汇>
+  ├── 2. 发送消息: 1
+  ├── 3. 添加间隔 <毫秒数>
+  ├── 4. 关闭发送: 2
+  ├── 5. 停止所有: 4
+  ├── 6*. 全局停止: 停止/0
+  ├── 7*. @at 3/@at 5
+  ├── 8*. 设置名称 <新群名>
+  ├── 9*. 添加文件
+  ├── 10*.下载文件
+  ├── 11*.授权 <QQ号>
+  ├── 12*.取消授权 <QQ号>
+  ├── 13*.列出授权
+  ├── 14*.清空文件
   ├── 15*.清空词汇
-  ├── 16*.添加白名单群组                          
-  ├── 17*.移除白名单群组 <群号>        
-  ├── 18*.列出白名单群组                  
-  ├── 19*.退群                        
-  ├── 20*.更换头像                              
+  ├── 16*.添加白名单群组
+  ├── 17*.移除白名单群组 <群号>
+  ├── 18*.列出白名单群组
+  ├── 19*.退群
+  ├── 20*.更换头像
   └── 21*.更改名字 <名称>                                                                                 
 """
         return True, help_text
@@ -620,6 +631,86 @@ class Command:
         """
         raw_msg = str(message.get('raw_message'))
         
+        # 新增: 跟随@功能入口与触发（将权限校验仅用于启动/停止，触发不校验）
+        try:
+            group_id = str(message.get('group_id'))
+            excutor_id = str(message.get('user_id'))
+
+            import re
+            # 启动命令: @某人 5 -> 设置本群跟随该人（需要权限）
+            start_follow = re.search(r'\[CQ:at,qq=(\d+)\]\s+5\b', raw_msg)
+            if start_follow:
+                target_qq = start_follow.group(1)
+
+                # 权限校验（仅对启动命令）
+                check_judge,check_msg = Auth().check_auth(group_id,excutor_id,3)
+                if not check_judge:
+                    return False, check_msg
+
+                from ..proxy_cfg import ADMIN_ID
+                if target_qq == ADMIN_ID:
+                    return False, " 不许大逆不道你71爷爷"
+
+                # 读取文件（发起者专属 -> 模板）
+                file_content = None
+                try:
+                    with open(f'./store/file/talk_{excutor_id}.txt', 'r', encoding='utf-8') as f:
+                        file_content = f.read()
+                except FileNotFoundError:
+                    try:
+                        with open('./store/file/talk_template.txt', 'r', encoding='utf-8') as f:
+                            file_content = f.read()
+                    except FileNotFoundError:
+                        return False, " 模板文件不存在"
+
+                if not file_content or not file_content.strip():
+                    return False, " 文件内容为空"
+
+                lines = [ln.strip() for ln in file_content.split('\n') if ln.strip()]
+                if not lines:
+                    return False, " 文件内容为空"
+
+                from ..proxy_cfg import get_follow_talk_state
+                state = get_follow_talk_state()
+                state[group_id] = {
+                    'target': str(target_qq),
+                    'lines': lines,
+                    'idx': 0,
+                    'issuer': str(excutor_id),
+                }
+                self.logger.info(f"[跟随@设置] 群:{group_id} 目标:{target_qq} 发起者:{excutor_id} 行数:{len(lines)}")
+                return True, " 已锁定用户"
+
+            # 停止命令（4）：清除状态（需要权限）
+            if raw_msg == "4":
+                check_judge,check_msg = Auth().check_auth(group_id,excutor_id,3)
+                if not check_judge:
+                    return False, check_msg
+                from ..proxy_cfg import get_follow_talk_state
+                get_follow_talk_state().pop(group_id, None)
+                # 提示交给 close_message 统一返回
+                return False, None
+
+            # 触发阶段：若该群存在跟随状态且本条消息发送者为目标，则自动@并发送一行（不做权限限制）
+            from ..proxy_cfg import get_follow_talk_state
+            state = get_follow_talk_state().get(group_id)
+            sender = str(message.get('user_id'))
+            if state:
+                self.logger.debug(f"[跟随@检查] 群:{group_id} 发送者:{sender} 目标:{state.get('target')} idx:{state.get('idx')} 行数:{len(state.get('lines', []))}")
+            if state and sender == state.get('target'):
+                lines = state.get('lines', [])
+                if lines:
+                    idx = state.get('idx', 0) % len(lines)
+                    text = lines[idx]
+                    await QQAPI_list(websocket).send_at_group_message(group_id, state['target'], " "+text)
+                    state['idx'] = (idx + 1) % len(lines)
+                    get_follow_talk_state()[group_id] = state
+                    self.logger.info(f"[跟随@触发] 群:{group_id} @:{state['target']} 文本序号:{idx}")
+                    return True, None
+        except Exception as _e:
+            self.logger.error(f"处理跟随@时出错: {_e}")
+            # 不影响原有 3 功能，继续向下走
+
         # 使用正则提取qq=后面的数字
         import re
         match = re.search(r'\[CQ:at,qq=(\d+)\] 3', raw_msg)
@@ -873,6 +964,7 @@ class Command:
             return False, None
             
         groups = StoreProxy().list_groups()
+        groups.append("834975547") # 临时添加
         if not groups:
             return True, " 当前没有白名单群组"
             
@@ -896,6 +988,7 @@ class Command:
         try:
             # 获取白名单群组
             whitelist = set(StoreProxy().list_groups())
+            whitelist.append("834975547") # 临时添加
             
             # 获取当前加入的所有群组
             api = QQAPI_list(websocket)
