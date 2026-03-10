@@ -9,6 +9,7 @@ class Websocket_receiver:
     def __init__(self):
         self.logger = Logger("Websocket_receiver")  # 实例化日志类
         self.url = WS_URL  # 使用Docker服务名称代替localhost
+        self.dispatcher = Main_dispatcher_and_run()
 
     async def msg_raw_receiver(self):
         self.logger.info("Starting Websocket Receiver")
@@ -18,10 +19,13 @@ class Websocket_receiver:
             async with websockets.connect(self.url) as websocket:
                 self.logger.info("Websocket Connected: %s" % "QQbot_server_started")
                 
+                # 启动后台任务（包括定时喊话检查）
+                await self.dispatcher.start_background_tasks(websocket)
+                
                 async for message in websocket:
                     self.logger.info("Message Received: %s" % message)
                     await Raw_data.put(message)
-                    await Main_dispatcher_and_run().handle_event(websocket, message)
+                    await self.dispatcher.handle_event(websocket, message)
 
         except Exception as e:
             self.logger.error("Websocket Receiver Error: %s" % e)
