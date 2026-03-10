@@ -109,7 +109,8 @@ class UserService:
         # 检查用户权限
         check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, user_id, 3)
         if not check_judge:
-            return False, check_msg
+            # 权限不足，不发送消息，避免重复
+            return False, None
         
         msg = "User 群组服务(user_service)指令菜单:\n" \
               "1. remove <target_user_id> - 移除用户权限\n" \
