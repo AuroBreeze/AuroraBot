@@ -171,9 +171,9 @@ class Store_db:
                 return False, "权限级别错误"
             # 检查父用户权限等级
             if self.check_user_permission(group_id, parent_id, 2) == False:
-                msg = f"用户{user_id}没有2级权限"
+                msg = f"用户{parent_id}没有2级权限"
                 self.logger.warning(f"用户{parent_id}没有2级权限")
-                return False,msg
+                return False, msg
 
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -181,12 +181,17 @@ class Store_db:
             # 新增：验证权限等级必须比授权者低一级
             cursor.execute("SELECT level FROM user_permissions WHERE group_id=? AND user_id=?", 
                          (group_id, parent_id))
-            parent_level = cursor.fetchone()[0]
+            parent_result = cursor.fetchone()
+            if parent_result is None:
+                msg = f"父用户{parent_id}在群组{group_id}中没有权限记录"
+                self.logger.warning(msg)
+                return False, msg
+                
+            parent_level = parent_result[0]
             if level <= parent_level:  # 新权限等级必须大于父级
-                if self.check_user_permission(group_id, parent_id, 2) == False:
-                    msg = f"权限等级必须比授权者({parent_level})低一级"
-                    self.logger.warning(msg)
-                    return False, msg
+                msg = f"权限等级必须比授权者({parent_level})低一级"
+                self.logger.warning(msg)
+                return False, msg
 
             cursor.execute("""
             INSERT OR REPLACE INTO user_permissions (group_id, user_id, level, parent_id)
