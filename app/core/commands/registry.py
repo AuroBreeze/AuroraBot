@@ -306,8 +306,18 @@ class CommandRegistry:
         lines.append("输入 /help <命令名> 查看命令详情")
         return "\n".join(lines)
 
-    def menu_text(self, group_id, user_id) -> str:
-        """中文命令菜单：按 app 分组列出调用者有权限的命令（显示中文名，与英文功能一致）"""
+    def menu_text(self, group_id, user_id, target: str = "") -> str:
+        """中文命令菜单：无 target 按 app 分组列出有权限命令（中文名）；
+        有 target 显示该命令详情（英文详情 + 中文命令名提示）"""
+        if target:
+            cmd = self._commands.get(target) or self._aliases.get(target)
+            if cmd is None:
+                return f"未找到命令: {target}（可用 /菜单 查看全部中文命令）"
+            if not self._can_see(group_id, user_id, cmd):
+                return f"无权查看命令 {target} 的详情"
+            cn = cmd.cn_name or cmd.name
+            return f"中文命令：{cn}（与 {cmd.name} 等价，用法相同）\n\n" \
+                   f"{self._help_detail(group_id, user_id, cmd.name)}"
         lines = [f"菜单（{'管理员' if self._is_privileged(group_id, user_id) else '成员'}）\n"]
         grouped: dict[str, list[Command]] = {}
         is_privileged = self._is_privileged(group_id, user_id)

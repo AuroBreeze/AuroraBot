@@ -286,6 +286,14 @@ def test_menu_and_cn_name():
         text2 = r.menu_text("g1", "u9")
         check("成员菜单过滤管理命令", "踢人 -" not in text2, text2)
         check("成员菜单标注", "菜单（成员）" in text2, text2)
+
+        # /菜单 <命令> 详情：中文名提示 + 英文详情（管理员视角）
+        registry_mod.permission_service = StubPerm(allowed=True)
+        detail = r.menu_text("g1", "admin", "踢人")
+        check("详情含中文名提示", "中文命令：踢人" in detail and "与 /kick 等价" in detail, detail)
+        check("详情复用英文详情", "用法" in detail and "批量踢人" in detail, detail)
+        # 未知命令
+        check("菜单未知命令提示", "未找到命令" in r.menu_text("g1", "admin", "/nope"))
     finally:
         registry_mod.permission_service = old_perm
 
