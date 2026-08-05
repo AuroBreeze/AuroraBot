@@ -102,46 +102,107 @@ class GroupManagerService:
         self.logger.info(f"观察期未发言踢出 群:{group_id} 用户:{user_id} 结果:{ok}")
 
     async def _ask_owner_before_kick(self, group_id: str, user_id: str) -> None:
-        """观察期到期未发言：询问群主与管理员（role=owner/admin），确认后才踢。今日已问过则不重复。"""
+        """观察期到期未发言：默认先只问群主；超时未回复再 @管理员/被授权用户；处理完毕即结束。"""
         api = get_api()
         if api is None:
             return
         extras = self.store.get_extras(group_id, user_id)
         today = timeutil.bj_now().strftime("%Y-%m-%d")
-        if extras.get("observe_pending") == "asking" and extras.get("observe_asked_date") == today:
-            return  # 今日已询问，等待群管回复
+        timeout_s = gm_config.get_int("observe_owner_timeout", 30) * 60
+
+        if extras.get("observe_pending") == "asking":
+            if extras.get("observe_asked_date") != today:
+                pass  # 隔日：允许重新询问
+            elif extras.get("observe_phase") == "managers":
+                return  # 已升级且今日已问，等待群管回复
+            elif extras.get("observe_phase") == "owner":
+                # 群主超时兜底（重启丢升级任务等场景）：直接升级到群管
+                asked_dt = timeutil.parse_local(extras.get("observe_asked_time") or "")
+                if asked_dt and (timeutil.bj_now() - asked_dt).total_seconds() >= timeout_s:
+                    await self._ask_managers_phase(group_id, user_id, extras)
+                return  # 未超时：等群主回复或升级任务触发
         try:
             members = await api.get_group_member_list(group_id)
         except Exception:
             self.logger.warning(f"观察期成员 {user_id} 未发言，查询群管失败，跳过（不踢）")
             return
-        # 群管理权限者：群主/管理员（role） + 被授权用户（Lssuing 2 级+）
         from app.core.permission import permission_service
-        managers, seen = [], set()
+        owner = next((str(m.get("user_id")) for m in members if m.get("role") == "owner"), None)
+        if owner:
+            # 阶段 1：只 @ 群主；超时未回复 → 升级任务
+            minutes = gm_config.get_int("observe_minutes", 10)
+            msg_id = await api.send_group_message_array(group_id, [
+                {"type": "at", "data": {"qq": owner}},
+                {"type": "text", "data": {
+                    "text": f" ⚠️ 成员 {user_id} 入群 {minutes} 分钟未发言，是否移出？\n"
+                            f"同意：回复此消息 1\n拒绝：回复此消息 0",
+                }},
+            ])
+            extras["observe_pending"] = "asking"
+            extras["observe_phase"] = "owner"
+            extras["observe_asked_date"] = today
+            extras["observe_asked_time"] = timeutil.now_str()
+            extras["observe_ask_msg_id"] = str(msg_id) if msg_id is not None else ""
+            self.store.set_extras(group_id, user_id, extras)
+            task_scheduler.schedule(
+                f"observe_escalate_{group_id}_{user_id}", timeout_s,
+                self._escalate_observe, group_id, user_id,
+            )
+            self.logger.info(f"观察期询问群主 群:{group_id} 成员:{user_id} 群主:{owner}（{timeout_s // 60} 分钟后升级群管）")
+        else:
+            # 无群主：直接问管理员/被授权用户
+            await self._ask_managers_phase(group_id, user_id, extras)
+
+    async def _ask_managers_phase(self, group_id: str, user_id: str, extras: dict) -> None:
+        """阶段 2：优先 @ 在线的管理员/被授权用户（最近发言者），请他们确认（处理完毕即结束）"""
+        api = get_api()
+        if api is None:
+            return
+        members = await api.get_group_member_list(group_id)
+        from app.core.permission import permission_service
+        candidates, seen = [], set()
         for m in members:
             uid = str(m.get("user_id") or "")
             if not uid or uid in seen:
                 continue
             role = m.get("role", "")
-            if role in ("owner", "admin") or permission_service.check_user_permission(group_id, uid, 2):
-                managers.append(uid)
+            # 阶段 2 不再 @ 群主：仅管理员与被授权用户
+            if role == "admin" or permission_service.check_user_permission(group_id, uid, 2):
                 seen.add(uid)
-        if not managers:
+                member = self.store.get_member(group_id, uid)
+                candidates.append((uid, timeutil.parse_local((member or {}).get("last_active") or "")))
+        if not candidates:
             self.logger.warning(f"观察期成员 {user_id} 未发言但找不到群主/管理员/被授权用户，跳过（不踢）")
             return
+        now = timeutil.bj_now()
+        online_min = gm_config.get_int("observe_online_minutes", 10)
+        at_most = max(1, gm_config.get_int("observe_escalate_at", 2))
+        # 按最近发言排序（无发言记录的排最后）
+        ranked = sorted(candidates, key=lambda c: (c[1] is None, -(c[1].timestamp() if c[1] else 0)))
+        online = [uid for uid, dt in ranked
+                  if dt is not None and 0 <= (now - dt).total_seconds() <= online_min * 60]
+        targets = (online or [uid for uid, _ in ranked])[:at_most]
         minutes = gm_config.get_int("observe_minutes", 10)
-        # 一条消息 @ 全部群管（记录 message_id 供群管回复匹配）
-        at_segs = [{"type": "at", "data": {"qq": m}} for m in managers]
+        at_segs = [{"type": "at", "data": {"qq": m}} for m in targets]
         at_segs.append({"type": "text", "data": {
-            "text": f" ⚠️ 成员 {user_id} 入群 {minutes} 分钟未发言，是否移出？\n"
+            "text": f" ⚠️ 群主暂未处理，成员 {user_id} 入群 {minutes} 分钟未发言，是否移出？\n"
                     f"同意：回复此消息 1\n拒绝：回复此消息 0",
         }})
         msg_id = await api.send_group_message_array(group_id, at_segs)
         extras["observe_pending"] = "asking"
-        extras["observe_asked_date"] = today
+        extras["observe_phase"] = "managers"
+        extras["observe_asked_date"] = timeutil.bj_now().strftime("%Y-%m-%d")
+        extras["observe_asked_time"] = timeutil.now_str()
         extras["observe_ask_msg_id"] = str(msg_id) if msg_id is not None else ""
         self.store.set_extras(group_id, user_id, extras)
-        self.logger.info(f"观察期询问群管 群:{group_id} 成员:{user_id} 群管:{managers}")
+        self.logger.info(f"观察期升级询问群管 群:{group_id} 成员:{user_id} 群管:{targets}")
+
+    async def _escalate_observe(self, group_id: str, user_id: str) -> None:
+        """群主超时未回复：升级到 @管理员/被授权用户"""
+        extras = self.store.get_extras(group_id, user_id)
+        if extras.get("observe_pending") != "asking" or extras.get("observe_phase") != "owner":
+            return  # 已处理或已升级
+        await self._ask_managers_phase(group_id, user_id, extras)
 
     async def handle_observe_reply(self, event) -> None:
         """群管回复观察期询问：回复该询问消息并输入 1（同意）/ 0（拒绝），精确处理对应成员。

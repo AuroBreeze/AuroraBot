@@ -759,15 +759,16 @@ def test_observe_ask_owner_and_nickname():
         })
 
     try:
-        # 观察期到期未发言 → 询问群管（@群主/管理员/被授权用户），不直接踢
+        # 阶段 1：观察期到期未发言 → 只 @ 群主，不直接踢
         store.record_join("g1", "u1")
         asyncio.run(svc._check_observation("g1", "u1"))
         check("未发言先询问而非踢出", ("g1", "u1") not in api.kicked, str(api.kicked))
         asked = asked_msgs()
         check("询问消息已发送", len(asked) == 1, len(asked))
         ats = {s.get("data", {}).get("qq") for s in asked[0][2] if s.get("type") == "at"}
-        check("询问对象含群主/管理员/被授权用户", ats == {"OWNER", "ADMIN", "VIP"}, ats)
+        check("阶段1只@群主", ats == {"OWNER"}, ats)
         check("pending 状态已记录", store.get_extras("g1", "u1").get("observe_pending") == "asking")
+        check("阶段为 owner", store.get_extras("g1", "u1").get("observe_phase") == "owner")
         ask_id_u1 = store.get_extras("g1", "u1")["observe_ask_msg_id"]
 
         # 重复检查不重复询问（今日已问）
@@ -778,24 +779,43 @@ def test_observe_ask_owner_and_nickname():
         asyncio.run(svc.handle_observe_reply(reply_event("u2", "member", ask_id_u1, "1", "路人")))
         check("非群管回复被忽略", ("g1", "u1") not in api.kicked, str(api.kicked))
 
-        # 群管回复该询问消息 + 0 → 拒绝（不踢 + pending 清理）
+        # 群主回复该询问消息 + 0 → 拒绝（不踢 + pending 清理，流程结束）
         asyncio.run(svc.handle_observe_reply(reply_event("OWNER", "owner", ask_id_u1, "0", "群主")))
         check("群主回复 0 拒绝不踢", ("g1", "u1") not in api.kicked, str(api.kicked))
         check("拒绝后 pending 清理", store.get_extras("g1", "u1").get("observe_pending") == "rejected")
 
-        # 管理员回复 1 → 踢出
+        # 阶段 2：群主超时未回复 → 升级，@ 在线的管理员/被授权用户（最近发言者）
+        # ADMIN 刚发言（在线）；VIP 无发言记录 → 只 @ ADMIN
         store.record_join("g1", "u3")
+        store.record_join("g1", "ADMIN")
+        svc.store.record_message("g1", "ADMIN")
         asyncio.run(svc._check_observation("g1", "u3"))
+        asyncio.run(svc._escalate_observe("g1", "u3"))
+        escalated = [m for m in api.messages if m[0] == "array" and "群主暂未处理" in text_of(m)]
+        check("升级询问已发送", len(escalated) == 1, len(escalated))
+        ats2 = {s.get("data", {}).get("qq") for s in escalated[0][2] if s.get("type") == "at"}
+        check("升级只@在线的管理员", ats2 == {"ADMIN"}, ats2)
+        check("阶段变为 managers", store.get_extras("g1", "u3").get("observe_phase") == "managers")
+
+        # 管理员回复升级询问 1 → 踢出
         ask_id_u3 = store.get_extras("g1", "u3")["observe_ask_msg_id"]
         asyncio.run(svc.handle_observe_reply(reply_event("ADMIN", "admin", ask_id_u3, "1", "管理员")))
         check("管理员回复 1 同意后踢出", ("g1", "u3") in api.kicked, str(api.kicked))
 
-        # 被授权用户（无 admin 角色）回复 1 → 踢出
-        store.record_join("g1", "u4")
-        asyncio.run(svc._check_observation("g1", "u4"))
-        ask_id_u4 = store.get_extras("g1", "u4")["observe_ask_msg_id"]
-        asyncio.run(svc.handle_observe_reply(reply_event("VIP", "member", ask_id_u4, "1", "付费用户")))
-        check("被授权用户回复 1 同意后踢出", ("g1", "u4") in api.kicked, str(api.kicked))
+        # 无群主的群：直接阶段 2 → @ 在线的被授权用户
+        store.record_join("g2", "u5")
+        store.record_join("g2", "VIP")
+        api2 = FakeAPI()
+        api2.member_roles = {"u5": "member", "ADMIN": "admin", "VIP": "member"}
+        set_api(api2)
+        api2.messages = []
+        svc.store.record_message("g2", "VIP")
+        asyncio.run(svc._check_observation("g2", "u5"))
+        asked2 = [m for m in api2.messages if m[0] == "array" and "群主暂未处理" in text_of(m)]
+        check("无群主群直接阶段2", len(asked2) == 1, len(asked2))
+        ats3 = {s.get("data", {}).get("qq") for s in asked2[0][2] if s.get("type") == "at"}
+        check("无群主时@在线被授权用户", ats3 == {"VIP"}, ats3)
+        set_api(api)  # 恢复
 
         # 回复了询问消息但内容非纯 1/0 → 忽略（防误触）
         store.record_join("g1", "u7")

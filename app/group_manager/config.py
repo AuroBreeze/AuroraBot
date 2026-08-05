@@ -15,7 +15,10 @@ CONFIG_PATH = os.path.join("config", "group_manager.yml")
 CONFIG_KEYS = {
     "enabled":                {"type": bool, "desc": "群管总开关"},
     "observe_minutes":        {"type": int,  "desc": "入群观察期（分钟），期内未发言将被移出"},
-    "observe_ask_owner":      {"type": bool, "desc": "观察期踢人前询问真实群主（确认后才踢；默认开启）"},
+    "observe_ask_owner":      {"type": bool, "desc": "观察期踢人前询问群管（确认后才踢；默认开启）"},
+    "observe_owner_timeout":  {"type": int,  "desc": "群主未回复升级群管的等待（分钟）"},
+    "observe_online_minutes": {"type": int,  "desc": "升级时“在线”判定窗口（分钟内发言的管理员/被授权用户）"},
+    "observe_escalate_at":    {"type": int,  "desc": "升级时最多 @ 的群管数量"},
     "auto_approve":           {"type": bool, "desc": "自动同意入群申请"},
     "auto_approve_scope":     {"type": str,  "desc": "自动同意范围：authorized=仅授权群 / all=全部群"},
     "auto_backfill":          {"type": bool, "desc": "自动补记录：未处理过的群自动补一次成员记录"},
@@ -41,7 +44,10 @@ _config_path = CONFIG_PATH
 DEFAULTS = {
     "enabled": True,                # 总开关
     "observe_minutes": 10,          # 观察期（分钟）：入群后未发言踢出
-    "observe_ask_owner": True,      # 观察期踢人前询问真实群主（确认后才踢，防误踢）
+    "observe_ask_owner": True,      # 观察期踢人前询问群管（确认后才踢，防误踢）
+    "observe_owner_timeout": 30,    # 群主未回复升级群管的等待（分钟）
+    "observe_online_minutes": 10,   # 升级时“在线”判定窗口（分钟内发言的群管）
+    "observe_escalate_at": 2,       # 升级时最多 @ 的群管数量
     "auto_approve": True,           # 自动同意入群
     "auto_approve_scope": "authorized",  # authorized=仅已授权群; all=全部
     "auto_backfill": True,          # 自动补记录：未处理过的群自动补一次
