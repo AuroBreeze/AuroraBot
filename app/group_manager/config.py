@@ -49,7 +49,7 @@ DEFAULTS = {
     "observe_owner_timeout": 30,    # 群主未回复升级群管的等待（分钟）
     "observe_online_minutes": 10,   # 升级时“在线”判定窗口（分钟内发言的群管）
     "observe_escalate_at": 2,       # 升级时最多 @ 的群管数量
-    "at_all_cooldown": 60,          # /at_all 冷却（秒/人/群，防刷屏）
+    "at_all_cooldown": 300,         # /at_all 冷却（秒/人/群，防刷屏；默认 5 分钟）
     "auto_approve": True,           # 自动同意入群
     "auto_approve_scope": "authorized",  # authorized=仅已授权群; all=全部
     "auto_backfill": True,          # 自动补记录：未处理过的群自动补一次
