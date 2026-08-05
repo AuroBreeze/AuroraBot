@@ -493,9 +493,10 @@ def test_never_kick_self():
 def test_inactive_kick():
     print("\n[12] 不活跃自动踢人（开关默认关闭，开启后 7 天可配 + 排除名单 + 踢前提醒）")
     from datetime import datetime, timedelta
+    from app.core import timeutil
     gm_config._config["inactive_kick_enabled"] = True  # 测试内显式开启
     svc, store = make_svc()
-    now = datetime.now(svc.bj_tz)
+    now = timeutil.bj_now()
 
     def ts(days_ago):
         return (now - timedelta(days=days_ago)).strftime("%Y-%m-%d %H:%M:%S")

@@ -1,5 +1,7 @@
 import json
 
+from api.Logger_owner import Logger
+
 # 命令注册中心：各 app 的命令在模块导入时注册，统一分发/鉴权/帮助
 from app.core.commands import registry
 import app.core.commands.bootstrap  # 注册内建 /help
@@ -25,6 +27,9 @@ class Msg_dispatcher:
     """
     原始消息分发处理器：统一走命令注册中心
     """
+    def __init__(self):
+        self.logger = Logger("Msg_dispatcher")
+
     async def handle_event(self, websocket, message):  # 事件处理器(功能注册处)
         try:
             if isinstance(message, str):
@@ -32,5 +37,4 @@ class Msg_dispatcher:
             # 统一命令分发：匹配、鉴权、执行、回复
             await registry.dispatch(websocket, message)
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            self.logger.error(f"消息分发异常: {e}", exc_info=True)

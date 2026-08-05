@@ -19,7 +19,7 @@ from api.Logger_owner import Logger
 from config.env import TIMEZONE
 
 DEFAULT_DB_PATH = os.path.join("store", "db", "member_store.db")
-TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+from app.core.timeutil import TIME_FORMAT
 
 
 class MemberStore:

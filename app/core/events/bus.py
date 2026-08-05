@@ -57,9 +57,7 @@ class EventBus:
             try:
                 await handler(event)
             except Exception as e:
-                self.logger.error(f"事件订阅者异常 ({event.type}): {e}")
-                import traceback
-                traceback.print_exc()
+                self.logger.error(f"事件订阅者异常 ({event.type}): {e}", exc_info=True)
 
     async def emit_raw(self, data: dict) -> Event:
         """ws 接收层入口：原始 OneBot 消息 → 分类 → 分发，返回 Event"""

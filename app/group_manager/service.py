@@ -10,11 +10,8 @@
 import re
 from datetime import datetime, timedelta
 
-import pytz
-
 from api.Logger_owner import Logger
-from config.env import TIMEZONE
-from app.core import member_store
+from app.core import member_store, timeutil
 from app.core.tasks import task_scheduler
 from app.core.runtime import get_api, get_self_id
 from . import config as gm_config
@@ -26,12 +23,11 @@ class GroupManagerService:
     def __init__(self):
         self.logger = Logger("group_manager")
         self.store = member_store.member_store
-        self.bj_tz = pytz.timezone(TIMEZONE)
         # 最近一次 /inactive 列表缓存（group_id -> 完整降序 user_id 列表），供 /kick 数字序号
         self._last_inactive: dict[str, list] = {}
 
     def _now_str(self) -> str:
-        return datetime.now(self.bj_tz).strftime("%Y-%m-%d %H:%M:%S")
+        return timeutil.now_str()
 
     # ---------- 入群引导 ----------
 
@@ -250,6 +246,8 @@ class GroupManagerService:
         自动补记录（后台周期任务）：对未标记过的已授权群补一次记录。
         幂等：已标记（处理过）的群跳过；未连接/无 API 时静默跳过。
         """
+        if not gm_config.get_bool("auto_backfill", True):
+            return
         api = get_api()
         if api is None:
             return
@@ -325,7 +323,7 @@ class GroupManagerService:
 
         days = gm_config.get_int("inactive_kick_days", 7)
         remind_days = gm_config.get_int("inactive_remind_days", 1)
-        now = datetime.now(self.bj_tz)
+        now = timeutil.bj_now()
 
         for group_id in await api.get_group_list():
             if not permission_service.check_group_authorized(group_id):
@@ -336,12 +334,8 @@ class GroupManagerService:
 
             for member in self.store.get_members(group_id):
                 uid = member["user_id"]
-                if not uid or uid == get_self_id():
-                    continue
-                if role_map.get(uid) in ("owner", "admin"):
-                    continue
-                # 有权限记录（付费用户/群管理员）不自动踢
-                if permission_service.check_user_permission(group_id, uid, 2):
+                # 统一保护：机器人自己 / 非群成员（退群残留）/ 群主管理员 / 有权限用户
+                if self._kick_reason(group_id, uid, role_map):
                     continue
 
                 # 不活跃时长：有活跃记录用 last_active，否则按 join_time 兜底
@@ -349,8 +343,10 @@ class GroupManagerService:
                 if not last:
                     continue
                 try:
-                    last_dt = datetime.strptime(last, "%Y-%m-%d %H:%M:%S").replace(tzinfo=self.bj_tz)
+                    last_dt = timeutil.parse_local(last)
                 except ValueError:
+                    last_dt = None
+                if last_dt is None:
                     continue
                 inactive = (now - last_dt).days
 
@@ -365,7 +361,7 @@ class GroupManagerService:
         api = get_api()
         if api is None:
             return
-        today = datetime.now(self.bj_tz).strftime("%Y-%m-%d")
+        today = timeutil.bj_now().strftime("%Y-%m-%d")
         extras = self.store.get_extras(group_id, user_id)
         if extras.get("inactive_reminded") == today:
             return
@@ -384,15 +380,17 @@ class GroupManagerService:
         if not last:
             return None
         try:
-            last_dt = datetime.strptime(last, "%Y-%m-%d %H:%M:%S").replace(tzinfo=self.bj_tz)
+            last_dt = timeutil.parse_local(last)
         except ValueError:
+            last_dt = None
+        if last_dt is None:
             return None
         return (now - last_dt).days
 
     def list_inactive_members(self, group_id: str, days: int, page: int = 0, page_size: int = 10) -> str:
         """列出本群不活跃成员：序号 + @ + 未活跃天数，按天数降序；page<=0 全部列出，>0 分页；缓存完整列表供 /kick 用"""
         days = max(1, days)
-        now = datetime.now(self.bj_tz)
+        now = timeutil.bj_now()
         rows = []
         for member in self.store.get_members(group_id):
             uid = member.get("user_id")
@@ -460,17 +458,11 @@ class GroupManagerService:
                 seen.add(t)
                 uniq.append(t)
 
-        from app.permission import permission_service
         ok_list, skip = [], []
         for uid in uniq:
-            if uid == get_self_id():
-                skip.append(f"{uid}(机器人自己)")
-            elif uid not in role_map:
-                skip.append(f"{uid}(不在群成员)")
-            elif role_map.get(uid) in ("owner", "admin"):
-                skip.append(f"{uid}(群主/管理员)")
-            elif permission_service.check_user_permission(group_id, uid, 2):
-                skip.append(f"{uid}(有权限)")
+            reason = self._kick_reason(group_id, uid, role_map)
+            if reason:
+                skip.append(f"{uid}({reason})")
             elif await api.set_group_kick_member(group_id, uid):
                 ok_list.append(uid)
             else:
@@ -486,6 +478,20 @@ class GroupManagerService:
         return text
 
     # ---------- 工具 ----------
+
+    def _kick_reason(self, group_id: str, uid: str, role_map: dict) -> str | None:
+        """返回不可踢原因（None=可踢）：机器人自己 / 非群成员 / 群主管理员 / 有权限用户"""
+        if not uid or uid == get_self_id():
+            return "机器人自己"
+        role = role_map.get(uid, "")
+        if not role:
+            return "不在群成员"
+        if role in ("owner", "admin"):
+            return "群主/管理员"
+        from app.permission import permission_service
+        if permission_service.check_user_permission(group_id, uid, 2):
+            return "有权限"
+        return None
 
     @staticmethod
     def get_reply_id(event) -> str:

@@ -222,9 +222,7 @@ class CommandRegistry:
         try:
             judge, reply = await cmd.handler(websocket, message)
         except Exception as e:
-            self.logger.error(f"命令 {cmd.name} 执行异常: {e}")
-            import traceback
-            traceback.print_exc()
+            self.logger.error(f"命令 {cmd.name} 执行异常: {e}", exc_info=True)
             await self._reply(websocket, group_id, f"❌ 命令 {cmd.name} 执行出错，请查看日志")
             return True
 

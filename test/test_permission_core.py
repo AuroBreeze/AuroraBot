@@ -173,7 +173,7 @@ def test_simple_subscribe_command():
 
     # 模拟 OneBot 群成员查询：群 7770001/7770002 的群主为 20001
     class FakeQQAPI:
-        def __init__(self, ws):
+        def __init__(self, ws=None):
             pass
 
         async def get_group_member_list(self, group_id):
@@ -183,9 +183,9 @@ def test_simple_subscribe_command():
             ]
 
     old_perm = group_svc_mod.permission_service
-    old_api = group_svc_mod.QQAPI_list
+    old_get_api = group_svc_mod.get_api
     group_svc_mod.permission_service = svc
-    group_svc_mod.QQAPI_list = FakeQQAPI
+    group_svc_mod.get_api = lambda: FakeQQAPI()
     try:
         g = GroupService()
         FAKE_WS = object()
@@ -227,12 +227,12 @@ def test_simple_subscribe_command():
             async def get_group_member_list(self, group_id):
                 raise RuntimeError("api down")
 
-        group_svc_mod.QQAPI_list = BoomAPI
+        group_svc_mod.get_api = lambda: BoomAPI()
         judge, msg = asyncio.run(run("/sub_group 7770008 30"))
         check("群主查询失败不影响订阅", judge, msg)
     finally:
         group_svc_mod.permission_service = old_perm
-        group_svc_mod.QQAPI_list = old_api
+        group_svc_mod.get_api = old_get_api
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 from datetime import datetime
 import pytz
 from api.Logger_owner import Logger
-from api.Botapi import QQAPI_list
+from app.core.runtime import get_api
 from config.env import TIMEZONE
 from app.permission import permission_service
 from app.permission.constants import LEVEL_OWNER
@@ -15,8 +15,11 @@ class GroupService:
 
     async def _find_group_owner(self, websocket, group_id) -> str | None:
         """查询真实群主 QQ（role=owner）；查询失败返回 None 不影响主流程"""
+        api = get_api()
+        if api is None:
+            return None
         try:
-            members = await QQAPI_list(websocket).get_group_member_list(group_id)
+            members = await api.get_group_member_list(group_id)
             for member in members:
                 if member.get("role") == "owner":
                     return str(member.get("user_id"))

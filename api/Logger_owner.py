@@ -34,11 +34,11 @@ class Logger:
         # 输出DEBUG级别的日志
         self.logger.debug(message)
 
-    def error(self, message):
+    def error(self, message, exc_info=False):
         if message == "":
             return
         # 输出ERROR级别的日志
-        self.logger.error(message)
+        self.logger.error(message, exc_info=exc_info)
 
     def warning(self, message):
         if message == "":
