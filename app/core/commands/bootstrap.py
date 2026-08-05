@@ -23,6 +23,12 @@ registry.register(Command(
     handler=_help_handler,
     description="查看命令菜单与帮助",
     usage="[命令名]",
+    detail="查看命令菜单：列出你有权限执行的全部命令，按 app 分组并标注所需权限。\n"
+           "输入 /help <命令名> 查看该命令的详细说明与示例。",
+    example="/help\n"
+            "# 查看全部命令菜单\n"
+            "/help sub_group\n"
+            "# 查看 /sub_group 的详细说明与示例",
     required_level=LEVEL_NONE,  # 所有用户可用
     app_name="系统",
 ))

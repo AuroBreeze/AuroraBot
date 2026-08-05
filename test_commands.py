@@ -274,6 +274,40 @@ def test_help_sorted_and_aligned():
         registry_mod.permission_service = old
 
 
+def test_help_detail_and_example():
+    print("\n[9] /help <命令> 详细说明与示例")
+    r = CommandRegistry()
+
+    async def h(ws, m):
+        return True, None
+
+    r.register(Command(
+        name="/sub_group", handler=h, required_level=LEVEL_SYSTEM, app_name="A",
+        description="登记授权群组", usage="<群号> <天数>",
+        detail="简单版群授权：立即生效。\n获权用户缺省为执行者。",
+        example="/sub_group 123456789 30\n# 授权 30 天",
+    ))
+    r.register(Command(
+        name="/plain", handler=h, required_level=LEVEL_NONE, app_name="A", description="无详情命令",
+    ))
+
+    import sys
+    registry_mod = sys.modules["app.core.commands.registry"]
+    old = registry_mod.permission_service
+    registry_mod.permission_service = StubPerm(allowed=True)
+    try:
+        detail = r.help_text("g", "u", "/sub_group")
+        check("详情含详细说明标题", "详细说明" in detail, detail)
+        check("详情含详细说明多行内容", "简单版群授权：立即生效" in detail and "获权用户缺省为执行者" in detail)
+        check("详情含示例标题", "示例" in detail)
+        check("详情含示例内容", "/sub_group 123456789 30" in detail and "# 授权 30 天" in detail)
+        plain = r.help_text("g", "u", "/plain")
+        check("无 detail 不显示详细说明", "详细说明" not in plain)
+        check("无 example 不显示示例", "示例" not in plain)
+    finally:
+        registry_mod.permission_service = old
+
+
 if __name__ == "__main__":
     test_register_and_conflict()
     test_match()
@@ -283,5 +317,6 @@ if __name__ == "__main__":
     test_validation_rejects_bad_commands()
     test_audit_and_prefix_conflict()
     test_help_sorted_and_aligned()
+    test_help_detail_and_example()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)

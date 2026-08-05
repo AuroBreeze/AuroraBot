@@ -259,6 +259,14 @@ class CommandRegistry:
         ]
         if cmd.usage:
             lines.append(f"🔧 用法: {cmd.usage}")
+        if cmd.detail:
+            lines.append("📖 详细说明:")
+            for ln in cmd.detail.splitlines():
+                lines.append(f"   {ln}")
+        if cmd.example:
+            lines.append("🧪 示例:")
+            for ln in cmd.example.splitlines():
+                lines.append(f"   {ln}")
         if cmd.sub_commands:
             lines.append("📂 子命令:")
             for sub, desc in cmd.sub_commands.items():
