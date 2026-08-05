@@ -110,7 +110,8 @@ class GroupManagerService:
         extras["flow"] = ""  # 流程完成
         self.store.set_extras(group_id, user_id, extras)
         confirm = gm_config.get()["tier_confirm"].format(tier=raw)
-        await api.send_group_message(group_id, f"[CQ:at,qq={user_id}] {confirm}")
+        # 用 at 段发送（文本里的 CQ 码不会解析）
+        await api.send_at_group_message(group_id, user_id, confirm)
 
     # ---------- 自动同意入群 ----------
 

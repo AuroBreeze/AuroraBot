@@ -40,7 +40,10 @@ class FakeAPI:
         self.member_infos = {}   # user_id -> dict（存在=是群成员）
 
     async def send_group_message(self, group_id, text):
-        self.messages.append((group_id, text))
+        self.messages.append(("group", group_id, text))
+
+    async def send_at_group_message(self, group_id, user_id, text):
+        self.messages.append(("at", group_id, text, user_id))
 
     async def set_group_kick_member(self, group_id, user_id, reject_add_request=False):
         self.kicked.append((group_id, user_id))
@@ -96,7 +99,8 @@ def test_member_join_flow():
     m = store.get_member("g1", "u9")
     check("成员已记录", m is not None and m["join_time"] is not None)
     check("观察期任务已调度", f"observe_g1_u9" in active, str(active))
-    check("欢迎消息已发送", len(api.messages) == 1 and "u9" in api.messages[0][1] and "10" in api.messages[0][1], str(api.messages))
+    check("欢迎消息已发送", len(api.messages) == 1 and api.messages[0][0] == "group"
+          and "u9" in api.messages[0][2] and "10" in api.messages[0][2], str(api.messages))
     check("段位询问状态已置", store.get_extras("g1", "u9").get("flow") == "awaiting_tier")
 
 
@@ -139,7 +143,8 @@ def test_tier_state_machine():
     asyncio.run(svc.handle_tier_reply(Ev1()))
     check("段位已登记", store.get_extras("g1", "u5").get("tier") == "钻石")
     check("流程已结束", store.get_extras("g1", "u5").get("flow") == "")
-    check("确认消息已发送", len(api.messages) == 1 and "钻石" in api.messages[0][1], str(api.messages))
+    check("确认消息以 at 发送", len(api.messages) == 1 and api.messages[0][0] == "at"
+          and api.messages[0][3] == "u5" and "钻石" in api.messages[0][2], str(api.messages))
 
 
 def test_auto_approve():
@@ -261,7 +266,8 @@ def test_event_bus_integration():
             raw_message = None
             data = {"group_id": "g1", "user_id": "uNew", "message_type": "group"}
         asyncio.run(event_bus.emit(Event(type=EventType.GROUP_INCREASE, data=Ev.data)))
-        check("事件驱动入群引导", len(api.messages) == 1 and "uNew" in api.messages[0][1], str(api.messages))
+        check("事件驱动入群引导", len(api.messages) == 1 and api.messages[0][0] == "group"
+              and "uNew" in api.messages[0][2], str(api.messages))
         m = store.get_member("g1", "uNew")
         check("事件驱动成员记录", m is not None and m["extras"].get("flow") == "awaiting_tier")
         from app.core.tasks import task_scheduler
