@@ -52,9 +52,9 @@ DEFAULTS = {
     "inactive_kick_interval": 3600, # 不活跃扫描间隔（秒）
     "inactive_remind_msg": "⚠️ 您已超过 {days} 天未发言，{left} 天后将被移出群聊，请尽快发言报到！",
     "welcome_msg": "欢迎 {user} 加入本群！\n请阅读群规：\n{rules}\n{link}\n\n{question}",
-    "rules_msg": "入群 {minutes} 分钟内未发言将被移出群聊，请尽快发言报到。",
+    "rules_msg": "入群 {minutes} 分钟内发言即可避免被移出群聊，请尽快发言报到。",
     "link": "",
-    "tier_question": "请回复此条消息登记您的游戏段位及游玩时间，回复任意文字即可（如：王者）：",
+    "tier_question": "（选填）回复此条消息可登记您的游戏段位及游玩时间，方便群管理，如：王者",
     "tier_confirm": "✅ 已登记您的段位：{tier}",
     "tier_denied": "⚠️ 段位登记失败，请稍后重试。",
 }
