@@ -270,6 +270,10 @@ def test_menu_and_cn_name():
         cmd = r.match("踢人 1 2")
         check("中文命令命中 /kick", cmd is not None and cmd.name == "/kick", str(cmd))
         check("cn_name 已加入别名", "踢人" in cmd.aliases, cmd.aliases)
+        # 带斜杠的中文命令（/踢人、/菜单）也能命中别名
+        check("带斜杠中文命令命中", r.match("/踢人 1").name == "/kick", r.match("/踢人 1"))
+        check("带斜杠中文菜单命中", r.match("/菜单 全体").name == "/menu", r.match("/菜单 全体"))
+        check("带斜杠英文别名命中", r.match("/kick 1").name == "/kick", r.match("/kick 1"))
 
         # 菜单：中文名 + 描述 + 权限过滤
         text = r.menu_text("g1", "admin")

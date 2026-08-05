@@ -211,7 +211,13 @@ class CommandRegistry:
         cmd = self._commands.get(first_word)
         if cmd is not None:
             return cmd
-        return self._aliases.get(first_word)
+        cmd = self._aliases.get(first_word)
+        if cmd is not None:
+            return cmd
+        # 别名不带斜杠（如中文命令 /踢人 → 别名 踢人；/help → 别名 help）
+        if first_word.startswith("/") and len(first_word) > 1:
+            return self._aliases.get(first_word[1:])
+        return None
 
     # ---------- 分发 ----------
 
