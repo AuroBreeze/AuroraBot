@@ -18,6 +18,11 @@ DEFAULTS = {
     "auto_approve_scope": "authorized",  # authorized=仅已授权群; all=全部
     "auto_backfill": True,          # 自动补记录：未处理过的群自动补一次
     "auto_backfill_interval": 300,  # 自动补记录检查间隔（秒）
+    "inactive_kick_enabled": True,  # 不活跃自动踢人开关
+    "inactive_kick_days": 7,        # 不活跃阈值（天）
+    "inactive_remind_days": 1,      # 踢前提醒（剩余天数）
+    "inactive_kick_interval": 3600, # 不活跃扫描间隔（秒）
+    "inactive_remind_msg": "⚠️ 您已超过 {days} 天未发言，{left} 天后将被移出群聊，请尽快发言报到！",
     "welcome_msg": "欢迎 {user} 加入本群！\n请阅读群规：\n{rules}\n{link}\n\n{question}",
     "rules_msg": "入群 {minutes} 分钟内未发言将被移出群聊，请尽快发言报到。",
     "link": "",

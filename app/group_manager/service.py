@@ -8,7 +8,7 @@
 - 自动同意入群：GROUP_REQUEST 事件按策略同意（set_group_add_request）
 """
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytz
 
@@ -304,6 +304,75 @@ class GroupManagerService:
             nxt = page + 1 if page < total_pages else 1
             lines.append(f"💡 /members {nxt} 查看下一页")
         return "\n".join(lines)
+
+    # ---------- 不活跃自动踢人 ----------
+
+    async def scan_inactive_members(self) -> None:
+        """
+        定期扫描：群成员不活跃超期 → 踢出（后台周期任务）。
+        - 超期判定：last_active 为空时按 join_time 兜底（全部超期都踢）
+        - 排除：bot 自己 / 群主与管理员（role）/ 有权限用户（Lssuing 2/3 级）
+        - 踢前提醒：剩余天数 <= inactive_remind_days 时 @ 提醒（当天不重复）
+        """
+        if not gm_config.get_bool("inactive_kick_enabled", True):
+            return
+        api = get_api()
+        if api is None:
+            return
+        from app.permission import permission_service
+
+        days = gm_config.get_int("inactive_kick_days", 7)
+        remind_days = gm_config.get_int("inactive_remind_days", 1)
+        now = datetime.now(self.bj_tz)
+
+        for group_id in await api.get_group_list():
+            if not permission_service.check_group_authorized(group_id):
+                continue
+            # 一次拉取成员 role（群主/管理员排除），避免逐人查 API
+            role_map = {str(m.get("user_id") or ""): m.get("role", "")
+                        for m in await api.get_group_member_list(group_id)}
+
+            for member in self.store.get_members(group_id):
+                uid = member["user_id"]
+                if not uid or uid == get_self_id():
+                    continue
+                if role_map.get(uid) in ("owner", "admin"):
+                    continue
+                # 有权限记录（付费用户/群管理员）不自动踢
+                if permission_service.check_user_permission(group_id, uid, 2):
+                    continue
+
+                # 不活跃时长：有活跃记录用 last_active，否则按 join_time 兜底
+                last = member["last_active"] or member["join_time"]
+                if not last:
+                    continue
+                try:
+                    last_dt = datetime.strptime(last, "%Y-%m-%d %H:%M:%S").replace(tzinfo=self.bj_tz)
+                except ValueError:
+                    continue
+                inactive = (now - last_dt).days
+
+                if inactive >= days:
+                    ok = await api.set_group_kick_member(group_id, uid)
+                    self.logger.info(f"不活跃踢出 群:{group_id} 用户:{uid} 不活跃:{inactive}天 结果:{ok}")
+                elif inactive >= days - remind_days:
+                    await self._remind_inactive(group_id, uid, days, inactive)
+
+    async def _remind_inactive(self, group_id: str, user_id: str, days: int, inactive: int) -> None:
+        """踢前提醒（当天不重复）"""
+        api = get_api()
+        if api is None:
+            return
+        today = datetime.now(self.bj_tz).strftime("%Y-%m-%d")
+        extras = self.store.get_extras(group_id, user_id)
+        if extras.get("inactive_reminded") == today:
+            return
+        left = days - inactive
+        msg = gm_config.get()["inactive_remind_msg"].format(days=inactive, left=left)
+        await api.send_at_group_message(group_id, user_id, msg)
+        extras["inactive_reminded"] = today
+        self.store.set_extras(group_id, user_id, extras)
+        self.logger.info(f"不活跃提醒 群:{group_id} 用户:{user_id} 剩余:{left}天")
 
     # ---------- 工具 ----------
 

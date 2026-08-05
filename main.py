@@ -18,6 +18,14 @@ async def main():
             group_manager_service.auto_backfill_pending,
         )
 
+    # 不活跃自动踢人：定期扫描超期成员（排除群主/管理员/有权限用户，踢前提醒）
+    if gm_config.get_bool("inactive_kick_enabled", True):
+        interval = gm_config.get_int("inactive_kick_interval", 3600)
+        task_scheduler.periodic(
+            "gm_inactive_kick", interval,
+            group_manager_service.scan_inactive_members,
+        )
+
     ws_receiver = Websocket_receiver()
     await ws_receiver.start_receiver()
 

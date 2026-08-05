@@ -487,6 +487,91 @@ def test_never_kick_self():
         runtime.set_api(None)
 
 
+def test_inactive_kick():
+    print("\n[12] 不活跃自动踢人（7 天可配 + 排除名单 + 踢前提醒）")
+    from datetime import datetime, timedelta
+    svc, store = make_svc()
+    now = datetime.now(svc.bj_tz)
+
+    def ts(days_ago):
+        return (now - timedelta(days=days_ago)).strftime("%Y-%m-%d %H:%M:%S")
+
+    # 成员：uOld 10 天未发言(超期) / uRmd 6 天未发言(剩1天提醒) / uNew 2 天 / uNoActive 无活跃按入群 9 天前
+    store.record_join("g1", "uOld", join_time=ts(20))
+    store.record_message("g1", "uOld")
+    store.get_member("g1", "uOld")  # last_active = now
+    # 覆盖 last_active 为 10 天前：直接 set 需要操作——用 record_message 后改？简化：重新构造
+    # 用 ensure + set 不可行，直接操作 store 连接
+    conn = store._get_connection()
+    conn.execute("UPDATE group_members SET last_active=? WHERE group_id='g1' AND user_id='uOld'", (ts(10),))
+    store.record_join("g1", "uRmd", join_time=ts(6))
+    store.record_join("g1", "uNew", join_time=ts(2))
+    store.record_join("g1", "uNoActive", join_time=ts(9))   # 无活跃记录，按入群 9 天超期
+    store.record_join("g1", "uOwner", join_time=ts(15))     # 群主，跳过
+    store.record_join("g1", "uAdmin", join_time=ts(15))     # 管理员，跳过
+    store.record_join("g1", "uVip", join_time=ts(15))       # 有权限用户，跳过
+    conn.commit()
+
+    class FakeInactiveAPI(FakeAPI):
+        async def get_group_list(self):
+            return ["g1"]
+
+        async def get_group_member_list(self, group_id):
+            return [
+                {"user_id": "uOwner", "role": "owner"},
+                {"user_id": "uAdmin", "role": "admin"},
+                {"user_id": "uVip", "role": "member"},
+                {"user_id": "uOld", "role": "member"},
+                {"user_id": "uRmd", "role": "member"},
+                {"user_id": "uNew", "role": "member"},
+                {"user_id": "uNoActive", "role": "member"},
+            ]
+
+    api = FakeInactiveAPI()
+    runtime.set_api(api)
+    runtime.set_self_id("BOTX")
+
+    import app.permission as perm_mod
+    old_perm = perm_mod.permission_service
+    # 有权限用户 uVip 判定为有权限；其余无
+    class StubPerm:
+        def check_group_authorized(self, g):
+            return True
+
+        def check_user_permission(self, g, u, level):
+            return u == "uVip"
+
+    perm_mod.permission_service = StubPerm()
+
+    from app.group_manager.service import group_manager_service
+    old_store = group_manager_service.store
+    group_manager_service.store = store
+    try:
+        asyncio.run(svc.scan_inactive_members())
+    finally:
+        group_manager_service.store = old_store
+        perm_mod.permission_service = old_perm
+
+    kicked = [k[1] for k in api.kicked]
+    check("超期成员被踢（有活跃记录）", "uOld" in kicked, str(kicked))
+    check("无活跃记录按入群超期被踢", "uNoActive" in kicked, str(kicked))
+    check("未超期不踢", "uNew" not in kicked and "uRmd" not in kicked, str(kicked))
+    check("群主跳过", "uOwner" not in kicked, str(kicked))
+    check("管理员跳过", "uAdmin" not in kicked, str(kicked))
+    check("有权限用户跳过", "uVip" not in kicked, str(kicked))
+    check("bot 跳过", "BOTX" not in kicked)
+
+    # 踢前提醒：uRmd（6 天，剩 1 天）
+    reminds = [m for m in api.messages if m[0] == "at" and m[3] == "uRmd"]
+    check("踢前提醒已发送", len(reminds) == 1 and "1 天" in reminds[0][2], str(reminds))
+    check("提醒当天不重复", store.get_extras("g1", "uRmd").get("inactive_reminded") == now.strftime("%Y-%m-%d"))
+
+    # 再扫描一次：uRmd 不再提醒
+    api.messages.clear()
+    asyncio.run(svc.scan_inactive_members())
+    check("提醒不重复", len(api.messages) == 0, str(api.messages))
+
+
 if __name__ == "__main__":
     test_config_defaults()
     test_member_join_flow()
@@ -499,5 +584,6 @@ if __name__ == "__main__":
     test_auto_backfill_pending()
     test_members_list()
     test_never_kick_self()
+    test_inactive_kick()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)
