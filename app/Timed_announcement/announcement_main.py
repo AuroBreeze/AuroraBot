@@ -6,8 +6,7 @@ from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 from config import env
 from .sql.store_announcement import StoreAnnouncement
-from app.Lssuing.services.sql.store_db import Store_db
-from app.Lssuing.services.auth.auth import AuthManager
+from app.permission import permission_service
 
 class TimedAnnouncement:
     """
@@ -19,8 +18,6 @@ class TimedAnnouncement:
         self.websocket = websocket
         self.message = message
         self.db = StoreAnnouncement()
-        self.auth_db = Store_db()
-        self.auth = AuthManager(self.auth_db)
         
     async def handle_event(self):
         """
@@ -39,13 +36,13 @@ class TimedAnnouncement:
         # 解析命令
         if msg.startswith("定时喊话"):
             # 检查用户权限（需要3级权限）
-            if not self.auth.check_permission(group_id, user_id, 3):
+            if not permission_service.check_user_permission(group_id, user_id, 3):
                 await self.send_message("⚠️ 您没有权限使用定时喊话功能")
                 return
             await self.handle_announcement_command(msg, user_id, group_id)
         elif msg == "喊话帮助" or msg == "喊话菜单":
             # 检查用户权限（需要3级权限）
-            if not self.auth.check_permission(group_id, user_id, 3):
+            if not permission_service.check_user_permission(group_id, user_id, 3):
                 await self.send_message("⚠️ 您没有权限使用定时喊话功能")
                 return
             await self.show_help()
@@ -418,6 +415,13 @@ class AnnouncementChecker:
                 try:
                     message = task['message']
                     group_id = task['group_id']
+
+                    # 执行前检查群组是否仍在授权期内（防授权过期/被移除后继续喊话）
+                    if not permission_service.check_group_authorized(group_id):
+                        self.logger.warning(
+                            f"群组 {group_id} 已无有效授权，跳过喊话任务 {task['id']}"
+                        )
+                        continue
                     
                     # 检查是否需要@全体成员
                     if message.startswith('[atall]'):
