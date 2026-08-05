@@ -16,6 +16,9 @@ from app.core.member_store import MemberStore
 from app.group_manager.service import GroupManagerService
 from app.group_manager import config as gm_config
 
+# 测试隔离：不依赖真实 config/group_manager.yml（用户可能修改），强制使用默认配置
+gm_config._config = dict(gm_config.DEFAULTS)
+
 PASS = []
 FAIL = []
 

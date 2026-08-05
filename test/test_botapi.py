@@ -152,9 +152,9 @@ def test_api_wrappers():
 
     # 校验 kick 请求参数
     kick_payload = ws.sent[3]
-    check("kick 参数正确", kick_payload["action"] == "set_group_kick_member"
+    check("kick 参数正确", kick_payload["action"] == "set_group_kick_members"
           and kick_payload["params"]["group_id"] == "111"
-          and kick_payload["params"]["user_id"] == "999", str(kick_payload))
+          and kick_payload["params"]["user_id"] == ["999"], str(kick_payload))
 
 
 def test_call_api_generic():

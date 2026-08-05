@@ -275,12 +275,16 @@ class QQAPI_list:
 
     async def set_group_kick_member(self, group_id: str, user_id: str, reject_add_request: bool = False) -> bool:
         """
-        踢出群成员（OneBot set_group_kick_member）
+        踢出群成员（NapCat set_group_kick_members 批量接口，传单成员）
         :param reject_add_request: 是否拒绝该用户再次入群
         """
         ok, _, msg = await self._call(
-            "set_group_kick_member",
-            {"group_id": str(group_id), "user_id": str(user_id), "reject_add_request": reject_add_request},
+            "set_group_kick_members",
+            {
+                "group_id": str(group_id),
+                "user_id": [str(user_id)],
+                "reject_add_request": reject_add_request,
+            },
         )
         if ok:
             self.Logger.info(f"已踢出成员 群:{group_id} 用户:{user_id}")
