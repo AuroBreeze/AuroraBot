@@ -1,35 +1,11 @@
 from datetime import datetime
 import pytz
 from api.Logger_owner import Logger
-from api.Botapi import QQAPI_list
 from config.env import TIMEZONE
 from app.permission import permission_service
 
-class GroupService_admin_API:
-    """1级（系统管理员）群组服务层：群组授权管理"""
-    def __init__(self, websocket, message):
-        self.logger = Logger("Lssuing_group_service")
-        self.service = GroupService()
-        self.websocket = websocket
-        self.message = message
-    async def handle_event(self) -> None:
-        """
-        统一处理各种事件
-        """
-        if self.message.get("message_type") != "group":
-            return
-        for handler in (
-            self.service.authorize_group,
-            self.service.remove_authorization,
-            self.service.check_group_list_and_kick,
-            self.service.help_service,
-        ):
-            judge, msg = await handler(self.message)
-            if msg is not None:
-                await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
-
 class GroupService:
-    """1级权限，群组服务层，封装所有群组相关业务逻辑"""
+    """1级（系统管理员）群组服务层：群组授权管理（命令 handler，不负责发送）"""
 
     def __init__(self):
         self.logger = Logger("Lssuing_group_service")
@@ -121,7 +97,7 @@ class GroupService:
                     remaining_days = (end_dt - current_time).days
 
                     if remaining_days <= 0:
-                        # 已过期群组：静默移除，失败仅记日志（不再把错误文本发回目标群）
+                        # 已过期群组：静默移除，失败仅记日志
                         judge, kick_msg = permission_service.kick_group(user_id, group_id)
                         if not judge:
                             self.logger.error(f"踢出过期群组 {group_id} 失败: {kick_msg}")
@@ -144,7 +120,6 @@ class GroupService:
             if warning_groups:
                 result_msg.append(f"⚠️ 即将过期群组(3天内): {', '.join(warning_groups)}")
 
-            # 总是显示所有正常群组
             if normal_groups:
                 result_msg.append("✅ 正常授权群组:")
                 result_msg.append("\n".join([f"  - {group}" for group in normal_groups]))
@@ -156,29 +131,3 @@ class GroupService:
         except Exception as e:
             self.logger.error(f"检查群组列表时发生未知错误: {e}", exc_info=True)
             return False, "系统错误，请稍后再试"
-
-    async def help_service(self, message) -> tuple[bool, str]:
-        """
-        指令菜单
-        """
-        msg = str(message.get("raw_message"))
-        if msg != "help":
-            self.logger.debug("无效的群组服务帮助命令格式")
-            return False, None
-
-        group_id = message.get("group_id")
-        user_id = str(message.get("user_id"))
-
-        if not permission_service.check_user_permission(group_id, user_id, 3):
-            return False, None  # 权限不足，不发送消息
-
-        msg = "Admin 群组服务(group_service)指令菜单:\n" \
-              "1. subscribe_group <target_group_id>\nstarttime now\nendtime <days:int>\nuser_id <target_user_id>\nfeatures all - 添加群组授权\n" \
-              "2. unsubscribe_group <target_group_id> - 取消群组授权\n" \
-              "3. check_group_list - 检查并踢出过期授权群\n"
-
-        return True, msg
-
-    async def send_group_message(self, websocket, group_id, message):
-        """发送群消息"""
-        await QQAPI_list(websocket).send_group_message(group_id, message)
