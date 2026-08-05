@@ -5,6 +5,7 @@ from app.core.hot_reload import hot_reloader
 from app.permission.constants import LEVEL_SYSTEM, LEVEL_ADMIN
 from . import events  # noqa: F401  （确保事件订阅注册；events 为接线层，不纳入热更新）
 from .service import group_manager_service
+from . import config as gm_config
 
 APP = "群管"
 
@@ -53,6 +54,17 @@ async def _members_handler(websocket, message) -> tuple[bool, str]:
     return True, group_manager_service.list_members(group_id, page)
 
 
+async def _gm_config_handler(websocket, message) -> tuple[bool, str]:
+    """/gm_config [set <键> <值>]：查看/修改群管配置"""
+    parts = str(message.get("raw_message", "")).strip().split()
+    if len(parts) == 1:
+        return True, gm_config.dump()
+    if len(parts) >= 3 and parts[1] == "set":
+        ok, msg = gm_config.set(parts[2], " ".join(parts[3:]))
+        return True, msg
+    return True, "用法：/gm_config 查看全部配置；/gm_config set <键> <值> 修改"
+
+
 def _register():
     registry.register(Command(
         name="/members",
@@ -97,6 +109,18 @@ def _register():
                "目标用户可为 @ 或 QQ 号；缺省为命令发起者。",
         example="/tier\n/tier 88888888",
         required_level=LEVEL_ADMIN, app_name=APP,
+    ))
+    registry.register(Command(
+        name="/gm_config",
+        aliases=["gm_config", "群管配置"],
+        handler=_gm_config_handler,
+        description="查看/修改群管配置（无需重启，立即生效）",
+        usage="查看：/gm_config；修改：/gm_config set <键> <值>",
+        detail="查看全部可配置项及当前值；修改后立即生效并写回配置文件。\n"
+               "文本含换行请用 \\n；布尔用 true/false。",
+        example="/gm_config\n/gm_config set inactive_kick_enabled true\n"
+                "/gm_config set welcome_msg 第一行\\n第二行",
+        required_level=LEVEL_SYSTEM, app_name=APP,
     ))
 
     # 热更新清单：service + commands（events 为接线层不重载）

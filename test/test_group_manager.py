@@ -575,6 +575,49 @@ def test_inactive_kick():
     check("提醒不重复", len(api.messages) == 0, str(api.messages))
 
 
+def test_gm_config_command():
+    print("\n[14] 群管配置命令（/gm_config：查看/修改/持久化）")
+    from app.group_manager.commands import _gm_config_handler
+
+    tmp_cfg = os.path.join(tempfile.gettempdir(), "gm_config_test.yml")
+    gm_config._config_path = tmp_cfg
+    try:
+        ok, msg = gm_config.set("inactive_kick_enabled", "true")
+        check("set 布尔转换生效", ok and gm_config.get()["inactive_kick_enabled"] is True, msg)
+        ok, msg = gm_config.set("inactive_kick_days", "14")
+        check("set 整数转换生效", ok and gm_config.get()["inactive_kick_days"] == 14, msg)
+        ok, msg = gm_config.set("welcome_msg", "第一行\\n第二行")
+        check("set 文本 \\n 转真实换行", ok and gm_config.get()["welcome_msg"] == "第一行\n第二行", msg)
+        ok, msg = gm_config.set("unknown_key", "1")
+        check("未知配置项拒绝", not ok and "未知配置项" in msg, msg)
+        ok, msg = gm_config.set("inactive_kick_days", "abc")
+        check("非法整数拒绝", not ok, msg)
+        ok, msg = gm_config.set("inactive_kick_enabled", "maybe")
+        check("非法布尔拒绝", not ok, msg)
+
+        text = gm_config.dump()
+        check("dump 含键与描述", "inactive_kick_days" in text and "不活跃" in text, text[:40])
+
+        # 持久化：重新加载可读到新值
+        gm_config.reload_config()
+        check("写回 yml 后 reload 生效", gm_config.get()["inactive_kick_days"] == 14)
+
+        async def run(raw):
+            return await _gm_config_handler(None, {"raw_message": raw, "group_id": "g1", "user_id": "u1"})
+
+        judge, text = asyncio.run(run("/gm_config"))
+        check("命令查看配置", judge and "群管配置" in text and "inactive_kick_enabled" in text, str(text)[:30])
+        judge, text = asyncio.run(run("/gm_config set inactive_kick_enabled false"))
+        check("命令修改配置", judge and "已设置" in text and gm_config.get()["inactive_kick_enabled"] is False, text)
+        judge, text = asyncio.run(run("/gm_config set nope 1"))
+        check("命令未知键拒绝", judge and "未知配置项" in text, text)
+    finally:
+        gm_config._config_path = gm_config.CONFIG_PATH
+        gm_config._config = dict(gm_config.DEFAULTS)
+        if os.path.exists(tmp_cfg):
+            os.remove(tmp_cfg)
+
+
 if __name__ == "__main__":
     test_config_defaults()
     test_member_join_flow()
@@ -588,5 +631,6 @@ if __name__ == "__main__":
     test_members_list()
     test_never_kick_self()
     test_inactive_kick()
+    test_gm_config_command()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)
