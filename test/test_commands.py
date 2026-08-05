@@ -47,6 +47,20 @@ class StubPerm:
         return self.allowed
 
 
+class FakeRuntimeAPI:
+    """registry._reply 经 runtime.get_api() 发送消息的 fake"""
+    def __init__(self, ws):
+        self.ws = ws
+
+    async def send_group_message(self, group_id, text):
+        import json
+        await self.ws.send(json.dumps({
+            "action": "send_group_msg",
+            "params": {"group_id": group_id, "message": [{"type": "text", "data": {"text": text}}]},
+        }))
+        return 1
+
+
 def msg(raw, group="g1", user="u1"):
     return {"raw_message": raw, "group_id": group, "user_id": user}
 
@@ -93,33 +107,40 @@ def test_dispatch_auth_and_reply():
 
     r.register(Command(name="/ok", handler=h, required_level=LEVEL_NONE))
 
-    # 命中 + 回复
+    # 命中 + 回复（registry._reply 走 runtime API）
+    from app.core.runtime import set_api
     ws = FakeWS()
-    handled = asyncio.run(r.dispatch(ws, msg("/ok 参数")))
-    check("命中返回 True", handled)
-    text = ws.sent[0]["params"]["message"][0]["data"]["text"]
-    check("回复已发送", len(ws.sent) == 1 and "执行了:/ok 参数" in text, str(ws.sent))
-
-    # 未命中
-    ws = FakeWS()
-    handled = asyncio.run(r.dispatch(ws, msg("不是命令")))
-    check("未命中返回 False 且不回复", not handled and ws.sent == [])
-
-    # 鉴权：权限不足（stub allowed=False）→ 统一回复
-    import sys
-    registry_mod = sys.modules["app.core.commands.registry"]
-    old_perm = registry_mod.permission_service
-    registry_mod.permission_service = StubPerm(allowed=False)
+    set_api(FakeRuntimeAPI(ws))
     try:
-        r2 = CommandRegistry()
-        r2.register(Command(name="/need3", handler=h, required_level=LEVEL_ADMIN))
-        ws = FakeWS()
-        handled = asyncio.run(r2.dispatch(ws, msg("/need3")))
-        check("权限不足返回 True（已处理）", handled)
+        handled = asyncio.run(r.dispatch(ws, msg("/ok 参数")))
+        check("命中返回 True", handled)
         text = ws.sent[0]["params"]["message"][0]["data"]["text"]
-        check("权限不足统一回复", len(ws.sent) == 1 and "权限不足" in text, text)
+        check("回复已发送", len(ws.sent) == 1 and "执行了:/ok 参数" in text, str(ws.sent))
+
+        # 未命中
+        ws = FakeWS()
+        set_api(FakeRuntimeAPI(ws))
+        handled = asyncio.run(r.dispatch(ws, msg("不是命令")))
+        check("未命中返回 False 且不回复", not handled and ws.sent == [])
+
+        # 鉴权：权限不足（stub allowed=False）→ 统一回复
+        import sys
+        registry_mod = sys.modules["app.core.commands.registry"]
+        old_perm = registry_mod.permission_service
+        registry_mod.permission_service = StubPerm(allowed=False)
+        try:
+            r2 = CommandRegistry()
+            r2.register(Command(name="/need3", handler=h, required_level=LEVEL_ADMIN))
+            ws = FakeWS()
+            set_api(FakeRuntimeAPI(ws))
+            handled = asyncio.run(r2.dispatch(ws, msg("/need3")))
+            check("权限不足返回 True（已处理）", handled)
+            text = ws.sent[0]["params"]["message"][0]["data"]["text"]
+            check("权限不足统一回复", len(ws.sent) == 1 and "权限不足" in text, text)
+        finally:
+            registry_mod.permission_service = old_perm
     finally:
-        registry_mod.permission_service = old_perm
+        set_api(None)
 
 
 def test_help_filter_and_group():
@@ -178,11 +199,16 @@ def test_handler_exception_handled():
         raise RuntimeError("boom")
 
     r.register(Command(name="/boom", handler=boom, required_level=LEVEL_NONE))
+    from app.core.runtime import set_api
     ws = FakeWS()
-    handled = asyncio.run(r.dispatch(ws, msg("/boom")))
-    check("异常命令返回 True（已处理）", handled)
-    text = ws.sent[0]["params"]["message"][0]["data"]["text"]
-    check("异常提示已回复", len(ws.sent) == 1 and "执行出错" in text, text)
+    set_api(FakeRuntimeAPI(ws))
+    try:
+        handled = asyncio.run(r.dispatch(ws, msg("/boom")))
+        check("异常命令返回 True（已处理）", handled)
+        text = ws.sent[0]["params"]["message"][0]["data"]["text"]
+        check("异常提示已回复", len(ws.sent) == 1 and "执行出错" in text, text)
+    finally:
+        set_api(None)
 
 
 def test_validation_rejects_bad_commands():

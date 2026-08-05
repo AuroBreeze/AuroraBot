@@ -56,6 +56,28 @@ def make_api():
     return ws, api
 
 
+def test_cross_instance_response():
+    print("\n[1b] 跨实例响应投递（进程级共享 pending 回归）")
+    # 修复前：registry._reply 新建 QQAPI_list 实例 B，ws 层只查实例 A 的
+    # _pending → 响应被当事件丢弃 → _call 超时。类级共享后任意实例可投递。
+    ws = MockWS()
+    api_a = QQAPI_list(ws)   # ws 层持有的实例
+    api_b = QQAPI_list(ws)   # 其他调用方 new 的实例
+
+    async def run():
+        task = asyncio.create_task(api_b._call("send_group_msg", {"group_id": "1"}, timeout=3))
+        await asyncio.sleep(0.05)
+        echo = ws.sent[-1]["echo"]
+        # ws 层（持有 api_a）收到响应，用 api_a.dispatch_response 投递
+        ws.api = api_a
+        ws.deliver(ws.ok({"message_id": 888}))
+        return await task
+
+    ok, data, msg = asyncio.run(run())
+    check("实例 B 的调用被实例 A 投递成功", ok and data["message_id"] == 888, (ok, data, msg))
+    check("类级 pending 清理", QQAPI_list._pending == {})
+
+
 def test_call_echo_match():
     print("\n[1] _call 成功：echo 匹配")
     ws, api = make_api()
@@ -70,7 +92,7 @@ def test_call_echo_match():
     ok, data, msg = asyncio.run(run())
     check("调用成功", ok and data["group_name"] == "测试群", (ok, data, msg))
     check("请求含 echo", "echo" in ws.sent[0] and ws.sent[0]["action"] == "get_group_info")
-    check("echo 已清理", api._pending == {})
+    check("echo 已清理", QQAPI_list._pending == {})
 
 
 def test_call_failed_response():
@@ -85,7 +107,7 @@ def test_call_failed_response():
 
     ok, data, msg = asyncio.run(run())
     check("失败返回 (False, None, msg)", (not ok) and data is None and msg == "权限不足", (ok, data, msg))
-    check("pending 清理", api._pending == {})
+    check("pending 清理", QQAPI_list._pending == {})
 
 
 def test_call_timeout():
@@ -97,14 +119,14 @@ def test_call_timeout():
 
     ok, data, msg = asyncio.run(run())
     check("超时返回失败", (not ok) and "超时" in msg, (ok, data, msg))
-    check("pending 清理", api._pending == {})
+    check("pending 清理", QQAPI_list._pending == {})
 
 
 def test_unmatched_echo_safe():
     print("\n[4] 未匹配 echo 投递无副作用")
     ws, api = make_api()
     api.dispatch_response("no-such-echo", {"status": "ok"})
-    check("未匹配 echo 不崩溃", api._pending == {})
+    check("未匹配 echo 不崩溃", QQAPI_list._pending == {})
 
 
 def test_api_wrappers():
@@ -173,6 +195,7 @@ def test_call_api_generic():
 
 if __name__ == "__main__":
     test_call_echo_match()
+    test_cross_instance_response()
     test_call_failed_response()
     test_call_timeout()
     test_unmatched_echo_safe()

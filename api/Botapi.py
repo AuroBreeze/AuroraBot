@@ -4,11 +4,12 @@ import time
 from api.Logger_owner import Logger
 
 class QQAPI_list:
-    def __init__(self,websocket):
+    # 进程级共享的 API 响应注册表：任何实例发起的 _call 响应都能被 ws 接收层投递
+    _pending: dict[str, asyncio.Future] = {}
+
+    def __init__(self, websocket):
         self.websocket = websocket
         self.Logger = Logger("BotAPI")
-        # 统一 API 请求通道：echo -> asyncio.Future（由消息接收层 dispatch_response 投递响应）
-        self._pending: dict[str, asyncio.Future] = {}
 
     # ---------- 统一请求通道 ----------
 
@@ -21,7 +22,7 @@ class QQAPI_list:
         echo = f"{time.time_ns()}-{id(self)}"
         payload = {"action": action, "params": params or {}, "echo": echo}
         fut = asyncio.get_running_loop().create_future()
-        self._pending[echo] = fut
+        type(self)._pending[echo] = fut
         try:
             await self.websocket.send(json.dumps(payload))
             response = await asyncio.wait_for(fut, timeout)
@@ -32,15 +33,15 @@ class QQAPI_list:
             self.Logger.error(f"API {action} 调用失败: {e}")
             return False, None, str(e)
         finally:
-            self._pending.pop(echo, None)
+            type(self)._pending.pop(echo, None)
 
         if response.get("status") == "ok":
             return True, response.get("data"), ""
         return False, None, response.get("message", "未知错误")
 
     def dispatch_response(self, echo: str, data: dict) -> None:
-        """由消息接收层调用：把带 echo 的响应投递给等待中的 _call"""
-        fut = self._pending.get(echo)
+        """由消息接收层调用：把带 echo 的响应投递给等待中的 _call（类级共享）"""
+        fut = type(self)._pending.get(echo)
         if fut is not None and not fut.done():
             fut.set_result(data)
 

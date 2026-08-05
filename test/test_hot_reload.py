@@ -58,8 +58,26 @@ def write_module(tmpdir, version):
 
 
 async def dispatch_once(raw):
+    from app.core.runtime import set_api
+
+    class FakeRuntimeAPI:
+        def __init__(self, ws):
+            self.ws = ws
+
+        async def send_group_message(self, group_id, text):
+            import json
+            await self.ws.send(json.dumps({
+                "action": "send_group_msg",
+                "params": {"group_id": group_id, "message": [{"type": "text", "data": {"text": text}}]},
+            }))
+            return 1
+
     ws = FakeWS()
-    handled = await registry.dispatch(ws, {"raw_message": raw, "group_id": "g", "user_id": "u"})
+    set_api(FakeRuntimeAPI(ws))
+    try:
+        handled = await registry.dispatch(ws, {"raw_message": raw, "group_id": "g", "user_id": "u"})
+    finally:
+        set_api(None)
     text = ""
     if ws.sent:
         text = ws.sent[0]["params"]["message"][0]["data"]["text"]

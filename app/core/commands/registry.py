@@ -13,7 +13,6 @@
 """
 
 from api.Logger_owner import Logger
-from api.Botapi import QQAPI_list
 from app.permission import permission_service
 from app.permission.constants import LEVEL_SYSTEM, LEVEL_OWNER, LEVEL_ADMIN, LEVEL_NONE
 from .model import Command, CommandHandler
@@ -317,8 +316,14 @@ class CommandRegistry:
 
     @staticmethod
     async def _reply(websocket, group_id, text: str) -> None:
+        # 统一走运行时 API 实例（不得新建实例，否则 echo 注册表不共享导致响应投递失败）
+        from app.core.runtime import get_api
+        api = get_api()
+        if api is None:
+            Logger("command_registry").warning("命令回复失败：API 不可用")
+            return
         try:
-            await QQAPI_list(websocket).send_group_message(group_id, text)
+            await api.send_group_message(group_id, text)
         except Exception as e:
             Logger("command_registry").error(f"发送命令回复失败: {e}")
 
