@@ -138,16 +138,35 @@ class GroupManagerService:
 
     # ---------- 查询 ----------
 
-    def query_member(self, group_id, user_id) -> str:
-        """成员档案：入群时间 / 最后活跃 / 游戏段位"""
+    async def query_member(self, group_id, user_id) -> str:
+        """
+        成员档案：入群时间 / 最后活跃 / 游戏段位。
+        无本地记录时调用 API 验证真实群成员身份：
+        - 是成员 → 补记录并提示"暂无活跃/段位记录"
+        - 非成员 → "不是本群成员"
+        - API 不可用 → 提示无法验证
+        """
         member = self.store.get_member(group_id, user_id)
-        if member is None:
-            return gm_config.get()["not_member"]
-        lines = [f"用户 {user_id}"]
-        lines.append(f"入群时间: {member['join_time'] or '未知'}")
-        lines.append(f"最后活跃: {member['last_active'] or '未发言'}")
-        lines.append(f"游戏段位: {member['extras'].get('tier') or '未登记'}")
-        return "\n".join(lines)
+        if member is not None:
+            lines = [f"用户 {user_id}"]
+            lines.append(f"入群时间: {member['join_time'] or '未知'}")
+            lines.append(f"最后活跃: {member['last_active'] or '未发言'}")
+            lines.append(f"游戏段位: {member['extras'].get('tier') or '未登记'}")
+            return "\n".join(lines)
+
+        # 无本地记录：验证是否真实群成员（存量成员未经过入群流程）
+        api = get_api()
+        if api is None:
+            return f"用户 {user_id} 暂无记录（API 不可用，无法验证成员身份）"
+
+        info = await api.get_group_member_info(group_id, user_id)
+        if info:
+            # 确认是群成员：补记录（后续活跃统计/段位流程可正常进行）
+            self.store.record_join(group_id, user_id)
+            self.logger.info(f"存量群成员补记录 群:{group_id} 用户:{user_id}")
+            return f"用户 {user_id} 是本群成员，但暂无活跃/段位记录（存量成员，未经过入群登记流程）"
+
+        return f"用户 {user_id} 不是本群成员"
 
     # ---------- 工具 ----------
 

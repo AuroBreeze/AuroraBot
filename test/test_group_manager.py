@@ -34,6 +34,7 @@ class FakeAPI:
         self.messages = []
         self.kicked = []
         self.approved = []
+        self.member_infos = {}   # user_id -> dict（存在=是群成员）
 
     async def send_group_message(self, group_id, text):
         self.messages.append((group_id, text))
@@ -45,6 +46,11 @@ class FakeAPI:
     async def set_group_add_request(self, flag, approve):
         self.approved.append((flag, approve))
         return True
+
+    async def get_group_member_info(self, group_id, user_id, no_cache=False):
+        if user_id in self.member_infos:
+            return self.member_infos[user_id]
+        return {}
 
 
 def make_svc():
@@ -174,14 +180,34 @@ def test_auto_approve():
 
 
 def test_query_and_commands():
-    print("\n[6] 查询与命令 handler")
+    print("\n[6] 查询与命令 handler（含存量成员验证）")
     svc, store = make_svc()
+    api = FakeAPI()
+    runtime.set_api(api)
+
+    # 有记录成员 → 档案
     store.record_join("g1", "u7", join_time="2026-01-01 08:00:00")
     store.record_message("g1", "u7")
     store.set_extras("g1", "u7", {"tier": "王者"})
 
-    text = svc.query_member("g1", "u7")
+    text = asyncio.run(svc.query_member("g1", "u7"))
     check("查询含段位与时间", "王者" in text and "2026-01-01 08:00:00" in text and "最后活跃" in text, text)
+
+    # 无记录 + 真实群成员 → 补记录 + 存量成员文案
+    api.member_infos["uOld"] = {"user_id": "uOld", "role": "member"}
+    text = asyncio.run(svc.query_member("g1", "uOld"))
+    check("存量成员文案", "是本群成员" in text and "暂无活跃/段位记录" in text, text)
+    check("存量成员已补记录", store.get_member("g1", "uOld") is not None)
+
+    # 无记录 + 非群成员
+    text = asyncio.run(svc.query_member("g1", "uStranger"))
+    check("非成员文案", "不是本群成员" in text, text)
+
+    # API 不可用
+    runtime.set_api(None)
+    text = asyncio.run(svc.query_member("g1", "uStranger"))
+    check("API 不可用文案", "无法验证" in text, text)
+    runtime.set_api(api)
 
     check("at 解析", svc.parse_at("[CQ:at,qq=3014617667] 3") == "3014617667")
     check("无 at 返回空", svc.parse_at("普通消息") == "")
@@ -198,7 +224,7 @@ def test_query_and_commands():
 
         msg2 = {"raw_message": "/tier 88888888", "group_id": "g1", "user_id": "u7"}
         judge, reply = asyncio.run(_tier_handler(None, msg2))
-        check("/tier 查询不存在成员", judge and "暂无记录" in reply, reply)
+        check("/tier 查询不存在成员", judge and "不是本群成员" in reply, reply)
     finally:
         group_manager_service.store = old_store
 

@@ -24,14 +24,14 @@ async def _active_handler(websocket, message) -> tuple[bool, str]:
     """/active [目标用户]：查看成员活跃信息"""
     group_id = str(message.get("group_id", ""))
     target = _parse_target(str(message.get("raw_message", "")), str(message.get("user_id")))
-    return True, group_manager_service.query_member(group_id, target)
+    return True, await group_manager_service.query_member(group_id, target)
 
 
 async def _tier_handler(websocket, message) -> tuple[bool, str]:
     """/tier [目标用户]：查看成员游戏段位"""
     group_id = str(message.get("group_id", ""))
     target = _parse_target(str(message.get("raw_message", "")), str(message.get("user_id")))
-    return True, group_manager_service.query_member(group_id, target)
+    return True, await group_manager_service.query_member(group_id, target)
 
 
 def _register():

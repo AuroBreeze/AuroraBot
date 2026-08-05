@@ -22,7 +22,6 @@ DEFAULTS = {
     "tier_question": "请回复您的游戏段位（如：王者、钻石、铂金…），回复任意文字即可登记：",
     "tier_confirm": "✅ 已登记您的段位：{tier}",
     "tier_denied": "⚠️ 段位登记失败，请稍后重试。",
-    "not_member": "该用户不是本群成员或暂无记录。",
 }
 
 _config = dict(DEFAULTS)
