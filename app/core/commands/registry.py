@@ -13,8 +13,8 @@
 """
 
 from api.Logger_owner import Logger
-from app.permission import permission_service
-from app.permission.constants import LEVEL_SYSTEM, LEVEL_OWNER, LEVEL_ADMIN, LEVEL_NONE
+from app.core.permission import permission_service
+from app.core.permission.constants import LEVEL_SYSTEM, LEVEL_OWNER, LEVEL_ADMIN, LEVEL_NONE
 from .model import Command, CommandHandler
 
 # 权限级别名称（帮助菜单展示）
@@ -58,6 +58,17 @@ class CommandRegistry:
         # 清理该 app 的历史冲突记录（热更新后重新注册不应再报旧冲突）
         self._rejected = [r for r in self._rejected if r["app"] != app_name]
         return removed
+
+    def snapshot(self, app_name: str) -> list:
+        """快照某 app 已注册的命令（热更新失败回滚用）"""
+        return [cmd for cmd in self._commands.values() if cmd.app_name == app_name]
+
+    def restore(self, app_name: str, cmds: list) -> None:
+        """重新注册快照命令（热更新失败回滚）"""
+        for cmd in cmds:
+            self.register(cmd)
+        if cmds:
+            self.logger.info(f"已恢复 {len(cmds)} 条命令 [{app_name}]")
 
     def register(self, cmd: Command) -> bool:
         """注册命令：先做格式校验，再做同名/别名冲突检测；冲突不覆盖、记录在案"""

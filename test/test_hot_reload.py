@@ -178,9 +178,39 @@ def test_syntax_error_abort():
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def test_runtime_error_rollback():
+    print("\n[4] 运行时错误回滚：重载失败恢复旧命令")
+    tmpdir = tempfile.mkdtemp(prefix="hot_boom_")
+    sys.path.insert(0, tmpdir)
+    old_root = hr_mod._SRC_ROOT
+    hr_mod._SRC_ROOT = tmpdir
+    hr = hr_mod.HotReloader()
+
+    try:
+        write_module(tmpdir, "v1")
+        importlib.import_module(MOD_NAME)
+        hr.register_app(APP_NAME, [MOD_NAME])
+
+        # 运行时异常版本（模块顶层抛异常，语法合法但 import 即炸）
+        Path(os.path.join(tmpdir, MOD_NAME + ".py")).write_text(
+            'raise RuntimeError("boom")\n', encoding="utf-8"
+        )
+        result = hr.reload_app(APP_NAME)
+        check("运行时错误触发回滚", "已回滚" in result, result)
+        handled, text = asyncio.run(dispatch_once("/hot_test"))
+        check("旧命令恢复可用", text == "hot-v1", text)
+    finally:
+        registry.unregister_by_app(APP_NAME)
+        hr_mod._SRC_ROOT = old_root
+        sys.modules.pop(MOD_NAME, None)
+        sys.path.remove(tmpdir)
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_unregister()
     test_reload_lifecycle()
     test_syntax_error_abort()
+    test_runtime_error_rollback()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)

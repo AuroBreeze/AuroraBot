@@ -26,6 +26,9 @@ async def _on_group_request(event):
 
 async def _on_message(event):
     from .service import group_manager_service
+    from . import config as gm_config
+    if not gm_config.get_bool("enabled", True):
+        return  # 群管总开关关闭：不记录活跃、不走段位状态机
     if event.data.get("message_type") != "group":
         return
     group_id = str(event.group_id or "")

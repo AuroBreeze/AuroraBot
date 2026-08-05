@@ -107,13 +107,19 @@ class MemberStore:
         return row is not None
 
     def record_message(self, group_id, user_id) -> None:
-        """更新最后发言时间（仅更新已记录成员；未记录成员忽略）"""
+        """更新最后发言时间（仅更新已记录成员；未记录成员忽略）。
+
+        秒级去重：同一用户同一秒重复发言不重复写库/commit（减少高频写放大）。
+        """
+        now = self._now_str()
         conn = self._get_connection()
-        conn.execute(
-            "UPDATE group_members SET last_active = ? WHERE group_id = ? AND user_id = ?",
-            (self._now_str(), str(group_id), str(user_id)),
+        cur = conn.execute(
+            "UPDATE group_members SET last_active = ? "
+            "WHERE group_id = ? AND user_id = ? AND (last_active IS NULL OR last_active != ?)",
+            (now, str(group_id), str(user_id), now),
         )
-        conn.commit()
+        if cur.rowcount:  # 实际有变化才 commit
+            conn.commit()
 
     def record_leave(self, group_id, user_id) -> None:
         """退群/被踢时清理成员记录"""

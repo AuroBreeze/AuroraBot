@@ -98,7 +98,8 @@ class HotReloader:
                 self.logger.error(f"app [{app_name}] 语法检查失败，中止重载:\n" + "\n".join(bad))
                 return f"❌ app [{app_name}] 语法错误，未重载:\n" + "\n".join(bad)
 
-            # 2. 移除旧命令（含别名）
+            # 2. 快照旧命令 → 移除旧命令（含别名）→ 按依赖序重载
+            snapshot = registry.snapshot(app_name)
             removed = registry.unregister_by_app(app_name)
             report.append(f"移除旧命令 {len(removed)} 条")
 
@@ -112,9 +113,12 @@ class HotReloader:
             registry.summary()
             return f"✅ app [{app_name}] 重载成功（{report[0]}，新命令已注册）"
         except Exception as e:
-            self.logger.error(f"app [{app_name}] 重载失败: {e}")
+            # 事务式回滚：重载失败时恢复旧命令，避免命令丢失
+            snapshot = locals().get("snapshot", [])
+            self.logger.error(f"app [{app_name}] 重载失败，回滚旧命令: {e}")
+            registry.restore(app_name, snapshot)
             registry.summary()
-            return f"❌ app [{app_name}] 重载失败: {e}（请检查日志，必要时重启进程）"
+            return f"❌ app [{app_name}] 重载失败已回滚: {e}（旧命令已恢复，请检查日志）"
         finally:
             self._reloading.discard(app_name)
 
