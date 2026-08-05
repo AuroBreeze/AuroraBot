@@ -85,6 +85,11 @@ async def _kick_handler(websocket, message) -> tuple[bool, str]:
     return True, await group_manager_service.kick_members(group_id, operator, str(message.get("raw_message", "")))
 
 
+async def _sync_active_handler(websocket, message) -> tuple[bool, str]:
+    """/sync_active：手动强制刷新全部授权群成员活跃（last_sent_time/nickname）"""
+    return True, await group_manager_service.sync_all_groups_active(force=True)
+
+
 def _register():
     registry.register(Command(
         name="/members",
@@ -166,6 +171,17 @@ def _register():
                "- 列表序号：先用 /inactive 查看，数字即该列表序号\n"
                "自动跳过：机器人自己/群主管理员/有权限用户/非群成员。",
         example="/kick 1 3\n/kick @user1 @user2\n/kick 1 @user3 123456789",
+        required_level=LEVEL_ADMIN, app_name=APP,
+    ))
+    registry.register(Command(
+        name="/sync_active",
+        aliases=["sync_active", "同步活跃"],
+        handler=_sync_active_handler,
+        description="手动强制刷新全部授权群成员活跃（last_sent_time/nickname）",
+        usage="无参数",
+        detail="立即遍历全部已授权群成员，调 get_group_member_info 刷新\n"
+               "最后活跃时间与昵称（无视 active_sync_enabled 开关，不等周期任务）。",
+        example="/sync_active",
         required_level=LEVEL_ADMIN, app_name=APP,
     ))
 

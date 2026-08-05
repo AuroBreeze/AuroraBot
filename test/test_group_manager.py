@@ -718,8 +718,14 @@ def test_api_active_sync():
         api2.member_roles = dict(api.member_roles)
         api2.member_infos = dict(api.member_infos)
         rt.set_api(api2)
-        asyncio.run(svc.sync_all_groups_active())
-        check("全群同步执行无异常", True)
+        result = asyncio.run(svc.sync_all_groups_active())
+        check("全群同步返回结果文本", "活跃同步完成" in result and "g1" in result, result)
+        # force=True 无视开关
+        gm_config._config["active_sync_enabled"] = False
+        result_off = asyncio.run(svc.sync_all_groups_active())
+        check("开关关闭时提示", "已关闭" in result_off, result_off)
+        result_force = asyncio.run(svc.sync_all_groups_active(force=True))
+        check("force=True 无视开关", "活跃同步完成" in result_force, result_force)
     finally:
         perm_mod.permission_service = old
 

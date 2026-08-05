@@ -456,19 +456,24 @@ class GroupManagerService:
             updated += 1
         return updated, total
 
-    async def sync_all_groups_active(self) -> None:
-        """周期任务：遍历全部已授权群同步成员活跃（开关 active_sync_enabled）"""
-        if not gm_config.get_bool("active_sync_enabled", True):
-            return
+    async def sync_all_groups_active(self, force: bool = False) -> str:
+        """遍历全部已授权群同步成员活跃；force=True 时无视开关（手动强制刷新）"""
+        if not force and not gm_config.get_bool("active_sync_enabled", True):
+            return "活跃同步已关闭（active_sync_enabled=false），可用 /sync_active 强制刷新"
         api = get_api()
         if api is None:
-            return
+            return "连接不可用，请稍后重试"
         from app.core.permission import permission_service
+        lines = []
         for group_id in await api.get_group_list():
             if not permission_service.check_group_authorized(group_id):
                 continue
             updated, total = await self.sync_group_members_active(group_id)
+            lines.append(f"群 {group_id}: 更新 {updated}/{total}")
             self.logger.info(f"活跃同步 群:{group_id} 更新:{updated}/{total}")
+        if not lines:
+            return "没有已授权群可同步（先 /sub_group 授权）"
+        return "✅ 活跃同步完成（last_sent_time/nickname 已刷新）\n" + "\n".join(lines)
 
     # ---------- 批量成员信息 ----------
 
