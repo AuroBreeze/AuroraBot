@@ -78,6 +78,8 @@ def test_config_defaults():
     check("默认开启", cfg["enabled"] is True)
     check("观察期默认 10 分钟", cfg["observe_minutes"] == 10)
     check("自动同意默认开启且仅授权群", cfg["auto_approve"] is True and cfg["auto_approve_scope"] == "authorized")
+    check("不活跃踢人默认关闭", cfg["inactive_kick_enabled"] is False)
+    check("不活跃阈值默认 7 天", cfg["inactive_kick_days"] == 7)
 
 
 def test_member_join_flow():
@@ -488,8 +490,9 @@ def test_never_kick_self():
 
 
 def test_inactive_kick():
-    print("\n[12] 不活跃自动踢人（7 天可配 + 排除名单 + 踢前提醒）")
+    print("\n[12] 不活跃自动踢人（开关默认关闭，开启后 7 天可配 + 排除名单 + 踢前提醒）")
     from datetime import datetime, timedelta
+    gm_config._config["inactive_kick_enabled"] = True  # 测试内显式开启
     svc, store = make_svc()
     now = datetime.now(svc.bj_tz)
 

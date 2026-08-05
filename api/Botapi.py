@@ -141,6 +141,12 @@ class QQAPI_list:
                         {
                             "type": "text",
                             "data": {
+                                "text": " "
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "data": {
                                 "text": message
                             }
                         }

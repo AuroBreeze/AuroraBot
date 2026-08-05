@@ -179,6 +179,18 @@ def test_api_wrappers():
           and kick_payload["params"]["user_id"] == ["999"], str(kick_payload))
 
 
+def test_send_at_group_message_space():
+    print("\n[1c] send_at_group_message：at 后含空格段")
+    ws = MockWS()
+    api = QQAPI_list(ws)
+    asyncio.run(api.send_at_group_message("g1", "u9", "请登记段位"))
+    payload = ws.sent[0]
+    segs = payload["params"]["message"]
+    check("消息含 at 段", segs[0] == {"type": "at", "data": {"qq": "u9"}}, str(segs))
+    check("at 后有空格段", segs[1] == {"type": "text", "data": {"text": " "}}, str(segs))
+    check("正文在后", segs[2]["data"]["text"] == "请登记段位", str(segs))
+
+
 def test_call_api_generic():
     print("\n[6] call_api 通用入口")
     ws, api = make_api()
@@ -196,6 +208,7 @@ def test_call_api_generic():
 if __name__ == "__main__":
     test_call_echo_match()
     test_cross_instance_response()
+    test_send_at_group_message_space()
     test_call_failed_response()
     test_call_timeout()
     test_unmatched_echo_safe()
