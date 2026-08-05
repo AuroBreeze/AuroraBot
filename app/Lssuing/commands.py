@@ -146,5 +146,18 @@ def _register():
         required_level=LEVEL_ADMIN, app_name=APP,
     ))
 
+    # 声明业务层热更新模块清单（依赖在前；commands 放最后，重载时自动重新注册）
+    from app.core.hot_reload import hot_reloader
+    hot_reloader.register_app(
+        APP,
+        modules=[
+            "app.Lssuing.services.admin.group_service",
+            "app.Lssuing.services.admin.user_service",
+            "app.Lssuing.services.user.group_service",
+            "app.Lssuing.services.user.user_service",
+            "app.Lssuing.commands",
+        ],
+    )
+
 
 _register()

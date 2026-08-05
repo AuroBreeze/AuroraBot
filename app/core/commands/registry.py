@@ -38,6 +38,28 @@ class CommandRegistry:
 
     # ---------- 注册 ----------
 
+    def unregister(self, name: str) -> bool:
+        """移除单条命令及其全部别名（热更新专用；不存在的命令返回 False）"""
+        cmd = self._commands.get(name)
+        if cmd is None:
+            return False
+        for alias in cmd.aliases:
+            self._aliases.pop(alias, None)
+        del self._commands[name]
+        self.logger.info(f"已注销命令 [{cmd.app_name}] {cmd.name}")
+        return True
+
+    def unregister_by_app(self, app_name: str) -> list[str]:
+        """移除某个 app 注册的全部命令（含别名），返回被移除的命令名列表"""
+        removed = []
+        for name in list(self._commands):
+            if self._commands[name].app_name == app_name:
+                removed.append(name)
+                self.unregister(name)
+        # 清理该 app 的历史冲突记录（热更新后重新注册不应再报旧冲突）
+        self._rejected = [r for r in self._rejected if r["app"] != app_name]
+        return removed
+
     def register(self, cmd: Command) -> bool:
         """注册命令：先做格式校验，再做同名/别名冲突检测；冲突不覆盖、记录在案"""
         # 格式校验
