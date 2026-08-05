@@ -123,10 +123,11 @@ def _register():
         required_level=LEVEL_SYSTEM, app_name=APP,
     ))
 
-    # 热更新清单：service + commands（events 为接线层不重载）
+    # 热更新清单：config（依赖最前）→ service → commands（events 为接线层不重载）
     hot_reloader.register_app(
         APP,
         modules=[
+            "app.group_manager.config",
             "app.group_manager.service",
             "app.group_manager.commands",
         ],
