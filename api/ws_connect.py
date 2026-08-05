@@ -62,8 +62,9 @@ class Websocket_receiver:
                         self.logger.error(f"无法解析的 WS 消息: {message}")
                         continue
                     if not self._route_message(data):
-                        # 非 API 响应 → 事件总线分发（request/notice 由上层订阅者处理）
-                        await event_bus.emit_raw(data)
+                        # 事件处理后台化：读取循环必须保持快速 recv，
+                        # 否则事件处理中调 API 等响应会与 recv 自锁（响应永远读不到）
+                        asyncio.create_task(event_bus.emit_raw(data))
 
         except websockets.exceptions.ConnectionClosedError as e:
             self.logger.error("Websocket Connection Closed Error: %s" % e)

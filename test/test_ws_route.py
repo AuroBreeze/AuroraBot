@@ -92,11 +92,13 @@ def test_route_echo_and_event():
         # 订阅 MESSAGE 事件，模拟 ws 层闭包订阅
         event_bus.subscribe(EventType.MESSAGE, on_message)
 
-        # 模拟接收循环
+        # 模拟接收循环（修复后：事件处理后台化，不阻塞 recv）
+        tasks = []
         async for raw in conn:
             data = json.loads(raw)
             if not recv._route_message(data):
-                await event_bus.emit_raw(data)
+                tasks.append(asyncio.create_task(event_bus.emit_raw(data)))
+        await asyncio.gather(*tasks)
 
         ok, data, msg = await call_task
         event_bus.unsubscribe(EventType.MESSAGE, on_message)
@@ -178,10 +180,56 @@ def test_msg_dispatcher_driven_by_event():
     check("MESSAGE 事件驱动 dispatcher", dispatched == ["hi"], str(dispatched))
 
 
+def test_event_api_response_no_deadlock():
+    print("\n[5] 自锁回归：事件处理中调 API，响应能在处理期间被读取循环投递")
+    # 修复前：ws 循环串行 await emit_raw → dispatch 等 API 响应 → 响应读不到 → 10s 超时
+    # 修复后：事件处理后台化，读取循环立即回到 recv，响应及时投递
+
+    async def scenario():
+        conn = FakeConn([])
+        api = QQAPI_list(conn)
+        recv = Websocket_receiver()
+        recv.api = api
+        result = {}
+
+        async def on_message(event):
+            ok, data, msg = await api._call("get_group_member_info", {"group_id": "1", "user_id": "2"}, timeout=3)
+            result["r"] = (ok, data)
+
+        event_bus.subscribe(EventType.MESSAGE, on_message)
+        try:
+            # 第一步：收到群消息 → 后台处理（emit_raw）
+            msg1 = json.dumps({"post_type": "message", "message_type": "group",
+                               "raw_message": "/active", "group_id": "g1", "user_id": "u1"})
+            data1 = json.loads(msg1)
+            assert not recv._route_message(data1)
+            task = asyncio.create_task(event_bus.emit_raw(data1))
+
+            # 等事件处理发出 API 请求，取 echo
+            await asyncio.sleep(0.05)
+            echo = conn.sent[-1]["echo"]
+
+            # 第二步：模拟读取循环继续 recv → API 响应到达 → 路由投递
+            resp = json.dumps({"status": "ok", "retcode": 0, "data": {"user_id": "2"},
+                               "message": "", "echo": echo})
+            data2 = json.loads(resp)
+            routed = recv._route_message(data2)
+
+            await task
+            return routed, result.get("r")
+        finally:
+            event_bus.unsubscribe(EventType.MESSAGE, on_message)
+
+    routed, r = asyncio.run(scenario())
+    check("响应被读取循环投递", routed is True)
+    check("事件处理拿到 API 响应（未超时）", r == (True, {"user_id": "2"}), str(r))
+
+
 if __name__ == "__main__":
     test_route_echo_and_event()
     test_route_unknown_echo_ignored()
     test_event_classification_through_ws()
     test_msg_dispatcher_driven_by_event()
+    test_event_api_response_no_deadlock()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)
