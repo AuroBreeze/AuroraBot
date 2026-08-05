@@ -48,6 +48,9 @@ class FakeAPI:
     async def send_at_group_message(self, group_id, user_id, text):
         self.messages.append(("at", group_id, text, user_id))
 
+    async def send_group_message_array(self, group_id, message_array):
+        self.messages.append(("array", group_id, message_array))
+
     async def set_group_kick_member(self, group_id, user_id, reject_add_request=False):
         self.kicked.append((group_id, user_id))
         return True
@@ -720,55 +723,83 @@ def test_api_active_sync():
 
 
 def test_observe_ask_owner_and_nickname():
-    print("\n[17] 观察期询问群主 + 昵称存储")
+    print("\n[17] 观察期询问群管（群主/管理员/被授权用户）+ 昵称存储")
     gm_config._config["observe_ask_owner"] = True
     from app.core.runtime import set_api, set_self_id
 
     svc, store = make_svc()
     api = FakeAPI()
-    api.member_roles = {"u1": "member", "OWNER": "owner"}
+    api.member_roles = {"u1": "member", "OWNER": "owner", "ADMIN": "admin", "VIP": "member"}
     set_api(api)
     set_self_id("BOTX")
 
-    # 观察期到期未发言 → 询问群主（@群主），不直接踢
-    store.record_join("g1", "u1")
-    asyncio.run(svc._check_observation("g1", "u1"))
-    check("未发言先询问群主而非踢出", ("g1", "u1") not in api.kicked, str(api.kicked))
-    asked = [m for m in api.messages if m[0] == "at" and "是否移出" in m[2]]
-    check("询问消息已发给群主", len(asked) == 1 and asked[0][3] == "OWNER", str(asked))
-    check("pending 状态已记录", store.get_extras("g1", "u1").get("observe_pending") == "asking")
+    import app.core.permission as perm_mod
+    old_perm = perm_mod.permission_service
 
-    # 重复检查不重复询问（今日已问）
-    asyncio.run(svc._check_observation("g1", "u1"))
-    asked = [m for m in api.messages if m[0] == "at" and "是否移出" in m[2]]
-    check("今日不重复询问", len(asked) == 1, len(asked))
+    class StubPerm:
+        def check_user_permission(self, g, u, level):
+            return u == "VIP"
 
-    # 非群主回复 → 忽略
-    asyncio.run(svc.handle_observe_reply(Event(
-        type=EventType.MESSAGE,
-        data={"message_type": "group", "group_id": "g1", "user_id": "u2", "raw_message": "同意移出 u1",
-              "sender": {"role": "member", "nickname": "路人"}},
-    )))
-    check("非群主回复被忽略", ("g1", "u1") not in api.kicked, str(api.kicked))
+    def text_of(msg):
+        return "".join((s.get("data") or {}).get("text", "") for s in msg[2])
 
-    # 群主拒绝 → 不踢 + pending 清理
-    asyncio.run(svc.handle_observe_reply(Event(
-        type=EventType.MESSAGE,
-        data={"message_type": "group", "group_id": "g1", "user_id": "OWNER", "raw_message": "拒绝移出 u1",
-              "sender": {"role": "owner", "nickname": "群主"}},
-    )))
-    check("群主拒绝不踢", ("g1", "u1") not in api.kicked, str(api.kicked))
-    check("拒绝后 pending 清理", store.get_extras("g1", "u1").get("observe_pending") == "rejected")
+    def asked_msgs():
+        return [m for m in api.messages if m[0] == "array" and "是否移出" in text_of(m)]
 
-    # 群主同意 → 踢出
-    store.record_join("g1", "u3")
-    asyncio.run(svc._check_observation("g1", "u3"))
-    asyncio.run(svc.handle_observe_reply(Event(
-        type=EventType.MESSAGE,
-        data={"message_type": "group", "group_id": "g1", "user_id": "OWNER", "raw_message": "同意移出 u3",
-              "sender": {"role": "owner", "nickname": "群主"}},
-    )))
-    check("群主同意后踢出", ("g1", "u3") in api.kicked, str(api.kicked))
+    perm_mod.permission_service = StubPerm()
+    try:
+        # 观察期到期未发言 → 询问群管（@群主/管理员/被授权用户），不直接踢
+        store.record_join("g1", "u1")
+        asyncio.run(svc._check_observation("g1", "u1"))
+        check("未发言先询问而非踢出", ("g1", "u1") not in api.kicked, str(api.kicked))
+        asked = asked_msgs()
+        check("询问消息已发送", len(asked) == 1, len(asked))
+        ats = {s.get("data", {}).get("qq") for s in asked[0][2] if s.get("type") == "at"}
+        check("询问对象含群主/管理员/被授权用户", ats == {"OWNER", "ADMIN", "VIP"}, ats)
+        check("pending 状态已记录", store.get_extras("g1", "u1").get("observe_pending") == "asking")
+
+        # 重复检查不重复询问（今日已问）
+        asyncio.run(svc._check_observation("g1", "u1"))
+        check("今日不重复询问", len(asked_msgs()) == 1, len(asked_msgs()))
+
+        # 非群管回复 → 忽略
+        asyncio.run(svc.handle_observe_reply(Event(
+            type=EventType.MESSAGE,
+            data={"message_type": "group", "group_id": "g1", "user_id": "u2", "raw_message": "同意移出 u1",
+                  "sender": {"role": "member", "nickname": "路人"}},
+        )))
+        check("非群管回复被忽略", ("g1", "u1") not in api.kicked, str(api.kicked))
+
+        # 群主拒绝 → 不踢 + pending 清理
+        asyncio.run(svc.handle_observe_reply(Event(
+            type=EventType.MESSAGE,
+            data={"message_type": "group", "group_id": "g1", "user_id": "OWNER", "raw_message": "拒绝移出 u1",
+                  "sender": {"role": "owner", "nickname": "群主"}},
+        )))
+        check("群主拒绝不踢", ("g1", "u1") not in api.kicked, str(api.kicked))
+        check("拒绝后 pending 清理", store.get_extras("g1", "u1").get("observe_pending") == "rejected")
+
+        # 管理员同意 → 踢出
+        store.record_join("g1", "u3")
+        asyncio.run(svc._check_observation("g1", "u3"))
+        asyncio.run(svc.handle_observe_reply(Event(
+            type=EventType.MESSAGE,
+            data={"message_type": "group", "group_id": "g1", "user_id": "ADMIN", "raw_message": "同意移出 u3",
+                  "sender": {"role": "admin", "nickname": "管理员"}},
+        )))
+        check("管理员同意后踢出", ("g1", "u3") in api.kicked, str(api.kicked))
+
+        # 被授权用户（无 admin 角色）同意 → 踢出
+        store.record_join("g1", "u4")
+        asyncio.run(svc._check_observation("g1", "u4"))
+        asyncio.run(svc.handle_observe_reply(Event(
+            type=EventType.MESSAGE,
+            data={"message_type": "group", "group_id": "g1", "user_id": "VIP", "raw_message": "同意移出 u4",
+                  "sender": {"role": "member", "nickname": "付费用户"}},
+        )))
+        check("被授权用户同意后踢出", ("g1", "u4") in api.kicked, str(api.kicked))
+    finally:
+        perm_mod.permission_service = old_perm
 
     # 昵称存储：API 同步保存 nickname
     from app.core import timeutil

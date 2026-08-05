@@ -102,43 +102,59 @@ class GroupManagerService:
         self.logger.info(f"观察期未发言踢出 群:{group_id} 用户:{user_id} 结果:{ok}")
 
     async def _ask_owner_before_kick(self, group_id: str, user_id: str) -> None:
-        """观察期到期未发言：询问真实群主（role=owner），确认后才踢。今日已问过则不重复。"""
+        """观察期到期未发言：询问群主与管理员（role=owner/admin），确认后才踢。今日已问过则不重复。"""
         api = get_api()
         if api is None:
             return
         extras = self.store.get_extras(group_id, user_id)
         today = timeutil.bj_now().strftime("%Y-%m-%d")
         if extras.get("observe_pending") == "asking" and extras.get("observe_asked_date") == today:
-            return  # 今日已询问，等待群主回复
+            return  # 今日已询问，等待群管回复
         try:
             members = await api.get_group_member_list(group_id)
         except Exception:
-            self.logger.warning(f"观察期成员 {user_id} 未发言，查询群主失败，跳过（不踢）")
+            self.logger.warning(f"观察期成员 {user_id} 未发言，查询群管失败，跳过（不踢）")
             return
-        owner = next((str(m.get("user_id")) for m in members if m.get("role") == "owner"), None)
-        if not owner:
-            self.logger.warning(f"观察期成员 {user_id} 未发言但找不到群主，跳过（不踢）")
+        # 群管理权限者：群主/管理员（role） + 被授权用户（Lssuing 2 级+）
+        from app.core.permission import permission_service
+        managers, seen = [], set()
+        for m in members:
+            uid = str(m.get("user_id") or "")
+            if not uid or uid in seen:
+                continue
+            role = m.get("role", "")
+            if role in ("owner", "admin") or permission_service.check_user_permission(group_id, uid, 2):
+                managers.append(uid)
+                seen.add(uid)
+        if not managers:
+            self.logger.warning(f"观察期成员 {user_id} 未发言但找不到群主/管理员/被授权用户，跳过（不踢）")
             return
         minutes = gm_config.get_int("observe_minutes", 10)
-        await api.send_at_group_message(
-            group_id, owner,
-            f"⚠️ 成员 {user_id} 入群 {minutes} 分钟未发言，是否移出？\n"
-            f"同意请回复：同意移出 {user_id}\n拒绝请回复：拒绝移出 {user_id}",
-        )
+        # 一条消息 @ 全部群管
+        at_segs = [{"type": "at", "data": {"qq": m}} for m in managers]
+        at_segs.append({"type": "text", "data": {
+            "text": f" ⚠️ 成员 {user_id} 入群 {minutes} 分钟未发言，是否移出？\n"
+                    f"同意请回复：同意移出 {user_id}\n拒绝请回复：拒绝移出 {user_id}",
+        }})
+        await api.send_group_message_array(group_id, at_segs)
         extras["observe_pending"] = "asking"
         extras["observe_asked_date"] = today
         self.store.set_extras(group_id, user_id, extras)
-        self.logger.info(f"观察期询问群主 群:{group_id} 成员:{user_id} 群主:{owner}")
+        self.logger.info(f"观察期询问群管 群:{group_id} 成员:{user_id} 群管:{managers}")
 
     async def handle_observe_reply(self, event) -> None:
-        """群主回复观察期询问：同意移出 / 拒绝移出（仅群主 role=owner 生效）"""
+        """群管回复观察期询问：同意移出 / 拒绝移出（仅群主/管理员/被授权用户生效）"""
         data = event.data
         group_id = str(event.group_id or "")
         if not group_id:
             return
         sender = data.get("sender") or {}
-        if sender.get("role") != "owner":
-            return  # 仅真实群主可确认
+        sender_role = sender.get("role", "")
+        sender_uid = str(data.get("user_id") or "")
+        # 群管理权限者：群主/管理员（role）或 被授权用户（Lssuing 2 级+）
+        from app.core.permission import permission_service
+        if sender_role not in ("owner", "admin") and not permission_service.check_user_permission(group_id, sender_uid, 2):
+            return  # 仅群主/管理员/被授权用户可确认
         raw = str(data.get("raw_message") or "").strip()
         agree = "同意移出" in raw
         reject = "拒绝移出" in raw
