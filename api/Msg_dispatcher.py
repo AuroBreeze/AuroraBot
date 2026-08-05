@@ -8,6 +8,9 @@ import app.Lssuing.commands         # 注册权限系统命令
 import app.Timed_announcement.commands  # 注册定时喊话命令
 from app.Timed_announcement.announcement_main import AnnouncementChecker
 
+# 启动审计：输出命令注册统计与冲突报告（同名/别名冲突、格式问题、前缀重叠）
+registry.summary()
+
 
 class Main_dispatcher_and_run:
     """

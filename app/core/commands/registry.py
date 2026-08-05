@@ -2,15 +2,15 @@
 命令注册中心（app/core/commands/registry.py）
 
 职责：
-- register: 注册命令，检测同名/别名冲突（启动告警，不覆盖）
+- register: 注册命令，检测同名/别名/前缀冲突与格式问题（告警，不覆盖）
 - dispatch: 首词匹配命令 → 统一权限校验 → 调用 handler → 统一发送回复
 - help_text: 按调用者权限过滤、按 app 分组的帮助菜单；支持查看单个命令详情
+- audit/summary: 命令健康检查（冲突、格式、统计），启动时输出报告
 
 设计原则：
 - 其他 app 通过装饰器或直接 register() 接入，零修改分发链
 - 未命中任何命令时返回 False（不吞消息），由调用方决定后续处理
 """
-import json
 
 from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
@@ -34,25 +34,133 @@ class CommandRegistry:
         self.logger = Logger("command_registry")
         self._commands: dict[str, Command] = {}  # name -> Command
         self._aliases: dict[str, Command] = {}    # alias -> Command
-        # 注册内建 help（延迟到 __init__ 之后由 bootstrap 注册，避免循环依赖）
+        self._rejected: list[dict] = []           # 注册被拒的记录（冲突/格式问题）
 
     # ---------- 注册 ----------
 
     def register(self, cmd: Command) -> bool:
-        """注册命令；发现冲突时告警并跳过（不覆盖已有命令）"""
+        """注册命令：先做格式校验，再做同名/别名冲突检测；冲突不覆盖、记录在案"""
+        # 格式校验
+        problems = self._validate(cmd)
+        if problems:
+            reason = "; ".join(problems)
+            self.logger.warning(f"命令注册被拒 [{cmd.app_name}] {cmd.name}: {reason}")
+            self._rejected.append({"app": cmd.app_name, "name": cmd.name, "reason": reason})
+            return False
+
+        # 同名/别名冲突检测（拒绝）
         for key in [cmd.name] + list(cmd.aliases):
             existing = self._commands.get(key) or self._aliases.get(key)
             if existing is not None:
+                reason = f"'{key}' 已被 [{existing.app_name}] {existing.name} 占用"
                 self.logger.warning(
-                    f"命令冲突: '{key}' 已被 [{existing.app_name}] {existing.name} 注册，"
-                    f"跳过 [{cmd.app_name}] {cmd.name} 的注册"
+                    f"命令冲突: {reason}，跳过 [{cmd.app_name}] {cmd.name} 的注册"
                 )
+                self._rejected.append({"app": cmd.app_name, "name": cmd.name, "reason": reason})
                 return False
+
+        # 前缀重叠检测（仅告警，不拒绝：首词精确匹配不受影响，但易造成混淆）
+        self._check_prefix_conflicts(cmd)
+
         self._commands[cmd.name] = cmd
         for alias in cmd.aliases:
             self._aliases[alias] = cmd
         self.logger.debug(f"已注册命令 [{cmd.app_name}] {cmd.name} (别名: {cmd.aliases})")
         return True
+
+    @staticmethod
+    def _validate(cmd: Command) -> list[str]:
+        """命令定义格式校验，返回问题列表（空 = 无问题）"""
+        problems = []
+        if not cmd.name or not cmd.name.strip():
+            problems.append("命令名不能为空")
+        elif " " in cmd.name.strip():
+            problems.append(f"命令名不能含空格: '{cmd.name}'")
+        if not callable(cmd.handler):
+            problems.append("handler 必须可调用")
+        if not (1 <= cmd.required_level <= LEVEL_NONE):
+            problems.append(f"required_level 非法: {cmd.required_level}（应为 1-{LEVEL_NONE}）")
+        for sub, desc in (cmd.sub_commands or {}).items():
+            if not isinstance(desc, str) or not desc.strip():
+                problems.append(f"子命令 '{sub}' 缺少说明")
+        return problems
+
+    def _check_prefix_conflicts(self, cmd: Command) -> None:
+        """检测新命令与已注册命令的前缀重叠（首词互为前缀，仅告警）"""
+        new_keys = [cmd.name] + list(cmd.aliases)
+        for other in self._commands.values():
+            other_keys = [other.name] + list(other.aliases)
+            for nk in new_keys:
+                for ok in other_keys:
+                    if nk == ok:
+                        continue
+                    if nk.startswith(ok) or ok.startswith(nk):
+                        self.logger.warning(
+                            f"前缀重叠: 新命令 '{nk}' 与已有命令 '{ok}'"
+                            f"（[{other.app_name}] {other.name}），首词虽精确匹配但易混淆"
+                        )
+
+    # ---------- 审计 ----------
+
+    def audit(self) -> dict:
+        """命令健康检查：统计 + 被拒冲突 + 当前前缀重叠"""
+        by_app: dict[str, int] = {}
+        for cmd in self._commands.values():
+            app = cmd.app_name or "其他"
+            by_app[app] = by_app.get(app, 0) + 1
+
+        # 重算已注册命令间的前缀重叠（区分跨 app 与同 app）
+        prefix_conflicts: list[tuple[str, str, bool]] = []  # (cmdA, cmdB, is_cross_app)
+        cmds = list(self._commands.values())
+        for i, a in enumerate(cmds):
+            keys_a = [a.name] + list(a.aliases)
+            for b in cmds[i + 1:]:
+                keys_b = [b.name] + list(b.aliases)
+                for ka in keys_a:
+                    for kb in keys_b:
+                        if ka == kb:
+                            continue
+                        if ka.startswith(kb) or kb.startswith(ka):
+                            prefix_conflicts.append((ka, kb, a.app_name != b.app_name))
+
+        return {
+            "total": len(self._commands),
+            "aliases": len(self._aliases),
+            "apps": by_app,
+            "conflicts": list(self._rejected),
+            "prefix_conflicts": prefix_conflicts,
+        }
+
+    def report_text(self) -> str:
+        """人类可读的审计报告"""
+        a = self.audit()
+        lines = [
+            f"命令注册中心审计: 共 {a['total']} 条命令 / {a['aliases']} 个别名 / {len(a['apps'])} 个 app",
+        ]
+        for app, n in sorted(a["apps"].items()):
+            lines.append(f"  [{app}] {n} 条")
+        if a["conflicts"]:
+            lines.append(f"⚠️ 注册被拒 {len(a['conflicts'])} 条冲突:")
+            for c in a["conflicts"]:
+                lines.append(f"  [{c['app']}] {c['name']}: {c['reason']}")
+        else:
+            lines.append("✅ 无注册冲突")
+        if a["prefix_conflicts"]:
+            cross = [p for p in a["prefix_conflicts"] if p[2]]
+            same = [p for p in a["prefix_conflicts"] if not p[2]]
+            if cross:
+                lines.append(f"⚠️ 跨 app 前缀冲突 {len(cross)} 组（易混淆，建议改名）:")
+                for ka, kb, _ in cross:
+                    lines.append(f"  '{ka}' 与 '{kb}'")
+            if same:
+                lines.append(f"ℹ️ 同 app 前缀重叠 {len(same)} 组（通常为关联命令，仅供参考）:")
+                for ka, kb, _ in same:
+                    lines.append(f"  '{ka}' 与 '{kb}'")
+        return "\n".join(lines)
+
+    def summary(self) -> None:
+        """启动时输出审计报告（日志）"""
+        self.logger.info(f"\n{self.report_text()}")
 
     # ---------- 匹配 ----------
 
