@@ -134,7 +134,7 @@ class GroupManagerService:
         at_segs = [{"type": "at", "data": {"qq": m}} for m in managers]
         at_segs.append({"type": "text", "data": {
             "text": f" ⚠️ 成员 {user_id} 入群 {minutes} 分钟未发言，是否移出？\n"
-                    f"同意请回复：同意移出 {user_id}\n拒绝请回复：拒绝移出 {user_id}",
+                    f"同意：回复 1（或：同意移出 {user_id}）\n拒绝：回复 0（或：拒绝移出 {user_id}）",
         }})
         await api.send_group_message_array(group_id, at_segs)
         extras["observe_pending"] = "asking"
@@ -158,6 +158,12 @@ class GroupManagerService:
         raw = str(data.get("raw_message") or "").strip()
         agree = "同意移出" in raw
         reject = "拒绝移出" in raw
+        if not agree and not reject:
+            # 快捷回复：1=同意 / 0=拒绝（可带目标 QQ，如 "1 123456"；无 pending 时无副作用）
+            parts = raw.split()
+            if len(parts) in (1, 2) and parts[0] in ("1", "0") and all(p.isdigit() for p in parts):
+                agree = parts[0] == "1"
+                reject = not agree
         if not agree and not reject:
             return
         # 本群待确认成员（observe_pending == asking）

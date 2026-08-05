@@ -798,6 +798,27 @@ def test_observe_ask_owner_and_nickname():
                   "sender": {"role": "member", "nickname": "付费用户"}},
         )))
         check("被授权用户同意后踢出", ("g1", "u4") in api.kicked, str(api.kicked))
+
+        # 快捷回复 1/0：1=同意（可带 QQ），0=拒绝
+        api.member_roles["55555"] = "member"
+        store.record_join("g1", "55555")
+        asyncio.run(svc._check_observation("g1", "55555"))
+        asyncio.run(svc.handle_observe_reply(Event(
+            type=EventType.MESSAGE,
+            data={"message_type": "group", "group_id": "g1", "user_id": "OWNER", "raw_message": "1 55555",
+                  "sender": {"role": "owner", "nickname": "群主"}},
+        )))
+        check("快捷回复 1 同意踢出", ("g1", "55555") in api.kicked, str(api.kicked))
+
+        store.record_join("g1", "u6")
+        asyncio.run(svc._check_observation("g1", "u6"))
+        asyncio.run(svc.handle_observe_reply(Event(
+            type=EventType.MESSAGE,
+            data={"message_type": "group", "group_id": "g1", "user_id": "ADMIN", "raw_message": "0",
+                  "sender": {"role": "admin", "nickname": "管理员"}},
+        )))
+        check("快捷回复 0 拒绝不踢", ("g1", "u6") not in api.kicked, str(api.kicked))
+        check("快捷回复 0 后 pending 清理", store.get_extras("g1", "u6").get("observe_pending") == "rejected")
     finally:
         perm_mod.permission_service = old_perm
 
