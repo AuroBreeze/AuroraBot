@@ -4,6 +4,7 @@ import json
 from app.core.commands import registry
 import app.core.commands.bootstrap  # 注册内建 /help
 import app.Lssuing.commands         # 注册权限系统命令
+import app.group_manager.commands   # 注册群管命令（含事件订阅）
 
 # 启动审计：输出命令注册统计与冲突报告（同名/别名冲突、格式问题、前缀重叠）
 registry.summary()
