@@ -10,9 +10,6 @@ def create_config():
     config = {
         'basic_settings': {
             'QQbot_admin_account': '',  # 管理员账号
-            'QQbot_account': '',      # 机器人账号
-            'API_token': '',  # API密钥
-            'Weather_api_key': ''  # 天气API密钥
         }
     }
     
