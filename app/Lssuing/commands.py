@@ -8,7 +8,7 @@
 from functools import partial
 
 from app.core.commands import registry, Command
-from app.permission.constants import LEVEL_SYSTEM, LEVEL_OWNER, LEVEL_ADMIN
+from app.core.permission.constants import LEVEL_SYSTEM, LEVEL_OWNER, LEVEL_ADMIN
 
 
 def _register():

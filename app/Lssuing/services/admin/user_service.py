@@ -1,5 +1,5 @@
 from api.Logger_owner import Logger
-from app.permission import permission_service
+from app.core.permission import permission_service
 
 class UserService:
     """用户权限管理（1级：跨群提权/移除，命令 handler，不负责发送）"""

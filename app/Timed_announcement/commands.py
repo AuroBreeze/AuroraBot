@@ -1,7 +1,7 @@
 """定时喊话命令注册（模块导入时执行，供消息分发器统一使用）"""
 
 from app.core.commands import registry, Command
-from app.permission.constants import LEVEL_ADMIN
+from app.core.permission.constants import LEVEL_ADMIN
 
 
 def _register():

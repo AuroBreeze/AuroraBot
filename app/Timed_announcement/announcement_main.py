@@ -6,7 +6,7 @@ from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 from config import env
 from .sql.store_announcement import StoreAnnouncement
-from app.permission import permission_service
+from app.core.permission import permission_service
 
 class TimedAnnouncement:
     """

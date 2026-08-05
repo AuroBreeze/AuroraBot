@@ -189,7 +189,7 @@ def test_auto_approve():
         data = {"group_id": "gA", "user_id": "uNew", "sub_type": "add", "flag": "flag1"}
 
     # patch 权限：gA 已授权
-    import app.permission as perm_mod
+    import app.core.permission as perm_mod
     old_perm = perm_mod.permission_service
     perm_mod.permission_service = type("Stub", (), {"check_group_authorized": staticmethod(lambda g: g == "gA")})()
     try:
@@ -373,7 +373,7 @@ def test_auto_backfill_pending():
     runtime.set_api(api3)
 
     # patch 权限：gA/gB 已授权
-    import app.permission as perm_mod
+    import app.core.permission as perm_mod
     old_perm = perm_mod.permission_service
     perm_mod.permission_service = type("Stub", (), {"check_group_authorized": staticmethod(lambda g: True)})()
 
@@ -536,7 +536,7 @@ def test_inactive_kick():
     runtime.set_api(api)
     runtime.set_self_id("BOTX")
 
-    import app.permission as perm_mod
+    import app.core.permission as perm_mod
     old_perm = perm_mod.permission_service
     # 有权限用户 uVip 判定为有权限；其余无
     class StubPerm:

@@ -158,7 +158,7 @@ class GroupManagerService:
 
         scope = gm_config.get_str("auto_approve_scope", "authorized")
         if scope == "authorized":
-            from app.permission import permission_service
+            from app.core.permission import permission_service
             if not permission_service.check_group_authorized(group_id):
                 self.logger.info(f"群 {group_id} 未授权，跳过自动同意")
                 return
@@ -227,7 +227,7 @@ class GroupManagerService:
         api = get_api()
         if api is None:
             return "⚠️ API 不可用，无法补记录"
-        from app.permission import permission_service
+        from app.core.permission import permission_service
 
         lines = []
         total_added = 0
@@ -251,7 +251,7 @@ class GroupManagerService:
         api = get_api()
         if api is None:
             return
-        from app.permission import permission_service
+        from app.core.permission import permission_service
 
         for group_id in await api.get_group_list():
             if not permission_service.check_group_authorized(group_id):
@@ -319,7 +319,7 @@ class GroupManagerService:
         api = get_api()
         if api is None:
             return
-        from app.permission import permission_service
+        from app.core.permission import permission_service
 
         days = gm_config.get_int("inactive_kick_days", 7)
         remind_days = gm_config.get_int("inactive_remind_days", 1)
@@ -488,7 +488,7 @@ class GroupManagerService:
             return "不在群成员"
         if role in ("owner", "admin"):
             return "群主/管理员"
-        from app.permission import permission_service
+        from app.core.permission import permission_service
         if permission_service.check_user_permission(group_id, uid, 2):
             return "有权限"
         return None

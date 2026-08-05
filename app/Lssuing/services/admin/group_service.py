@@ -3,8 +3,8 @@ import pytz
 from api.Logger_owner import Logger
 from app.core.runtime import get_api
 from config.env import TIMEZONE
-from app.permission import permission_service
-from app.permission.constants import LEVEL_OWNER
+from app.core.permission import permission_service
+from app.core.permission.constants import LEVEL_OWNER
 
 class GroupService:
     """1级（系统管理员）群组服务层：群组授权管理（命令 handler，不负责发送）"""

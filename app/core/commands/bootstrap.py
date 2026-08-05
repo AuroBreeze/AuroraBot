@@ -1,6 +1,6 @@
 """注册内建 /help 命令（模块导入时执行）"""
 
-from app.permission.constants import LEVEL_NONE
+from app.core.permission.constants import LEVEL_NONE
 from .model import Command
 from .registry import registry
 

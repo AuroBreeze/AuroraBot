@@ -11,9 +11,9 @@ import tempfile
 # 确保从项目根可导入 app.*（脚本位于 test/ 子目录）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.permission.constants import LEVEL_OWNER, LEVEL_ADMIN
-from app.permission.store import PermissionStore
-from app.permission.service import PermissionService
+from app.core.permission.constants import LEVEL_OWNER, LEVEL_ADMIN
+from app.core.permission.store import PermissionStore
+from app.core.permission.service import PermissionService
 
 PASS = []
 FAIL = []

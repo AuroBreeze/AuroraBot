@@ -3,6 +3,13 @@ import asyncio
 
 
 async def main():
+    # ---- 装配层：注册各 app 命令（模块导入即注册），输出启动审计 ----
+    import app.core.commands.bootstrap   # 注册内建 /help
+    import app.Lssuing.commands          # 注册权限系统命令
+    import app.group_manager.commands    # 注册群管命令（含事件订阅）
+    from app.core.commands import registry
+    registry.summary()
+
     # 启动业务层热更新文件监控（修改 app 业务代码后自动重载，无需重启进程）
     from app.core.hot_reload import hot_reloader
     await hot_reloader.start_watch(interval=2.0)

@@ -1,5 +1,5 @@
 from api.Logger_owner import Logger
-from app.permission import permission_service
+from app.core.permission import permission_service
 
 class GroupService:
     """2,3级权限，群组服务层：用户侧群组查询（命令 handler，不负责发送）"""

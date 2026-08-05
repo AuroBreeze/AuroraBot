@@ -2,7 +2,7 @@
 
 from app.core.commands import registry, Command
 from app.core.hot_reload import hot_reloader
-from app.permission.constants import LEVEL_SYSTEM, LEVEL_ADMIN
+from app.core.permission.constants import LEVEL_SYSTEM, LEVEL_ADMIN
 from . import events  # noqa: F401  （确保事件订阅注册；events 为接线层，不纳入热更新）
 from .service import group_manager_service
 from . import config as gm_config

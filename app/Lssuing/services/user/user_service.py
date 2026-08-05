@@ -1,5 +1,5 @@
 from api.Logger_owner import Logger
-from app.permission import permission_service, LEVEL_ADMIN
+from app.core.permission import permission_service, LEVEL_ADMIN
 
 class UserService:
     """2,3级权限，群组服务层：本群用户权限管理（命令 handler，不负责发送）"""
