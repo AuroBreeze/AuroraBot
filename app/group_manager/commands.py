@@ -2,7 +2,7 @@
 
 from app.core.commands import registry, Command
 from app.core.hot_reload import hot_reloader
-from app.permission.constants import LEVEL_ADMIN
+from app.permission.constants import LEVEL_SYSTEM, LEVEL_ADMIN
 from . import events  # noqa: F401  （确保事件订阅注册；events 为接线层，不纳入热更新）
 from .service import group_manager_service
 
@@ -34,7 +34,27 @@ async def _tier_handler(websocket, message) -> tuple[bool, str]:
     return True, await group_manager_service.query_member(group_id, target)
 
 
+async def _backfill_handler(websocket, message) -> tuple[bool, str]:
+    """/backfill [群号]：批量补记录（指定群或全部已授权群）"""
+    parts = str(message.get("raw_message", "")).split()
+    if len(parts) > 1 and parts[1].isdigit():
+        added, total = await group_manager_service.backfill_group(parts[1])
+        return True, f"群 {parts[1]} 补记录完成：新增 {added}/{total}"
+    return True, await group_manager_service.backfill_all()
+
+
 def _register():
+    registry.register(Command(
+        name="/backfill",
+        aliases=["backfill"],
+        handler=_backfill_handler,
+        description="存量成员批量补记录",
+        usage="[群号，缺省=全部已授权群]",
+        detail="拉取真实群成员列表，补齐 MemberStore 缺失的成员记录\n"
+               "（已存在记录不被覆盖；仅处理已授权群）。",
+        example="/backfill\n/backfill 123456789",
+        required_level=LEVEL_SYSTEM, app_name=APP,
+    ))
     registry.register(Command(
         name="/active",
         aliases=["active"],

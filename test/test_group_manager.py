@@ -59,6 +59,9 @@ class FakeAPI:
             return self.member_infos[user_id]
         return {}
 
+    async def get_group_member_list(self, group_id):
+        return []
+
 
 def make_svc():
     """独立 MemberStore + 独立 service 实例（不污染全局单例与真实库）"""
@@ -301,6 +304,49 @@ def test_event_bus_integration():
         runtime.set_api(None)
 
 
+def test_backfill():
+    print("\n[8] 存量成员批量补记录（ensure_member 不覆盖）")
+    svc, store = make_svc()
+    api = FakeAPI()
+    runtime.set_api(api)
+
+    # 已有成员（含 extras）不应被覆盖
+    store.record_join("g1", "uOld", join_time="2026-01-01 00:00:00")
+    store.set_extras("g1", "uOld", {"tier": "王者"})
+
+    # 群成员列表：2 个存量 + 1 个已有
+    api.member_infos = {}  # 复用 get_group_member_info 的字典不需要；直接用 get_group_member_list
+    class FakeAPI2(FakeAPI):
+        async def get_group_member_list(self, group_id):
+            return [{"user_id": "uOld"}, {"user_id": "uA"}, {"user_id": "uB"}]
+    old_api = runtime.get_api()
+    api2 = FakeAPI2()
+    runtime.set_api(api2)
+    try:
+        added, total = asyncio.run(svc.backfill_group("g1"))
+    finally:
+        runtime.set_api(old_api)
+    check("补记录计数", added == 2 and total == 3, str((added, total)))
+    check("新增成员已记录", store.get_member("g1", "uA") is not None and store.get_member("g1", "uB") is not None)
+    old = store.get_member("g1", "uOld")
+    check("已有成员未覆盖", old["join_time"] == "2026-01-01 00:00:00" and old["extras"].get("tier") == "王者", str(old))
+
+    # ensure_member 幂等
+    check("ensure_member 幂等", store.ensure_member("g1", "uA") is False)
+    check("ensure_member 新增", store.ensure_member("g1", "uC") is True)
+
+    # 命令 handler
+    from app.group_manager.commands import _backfill_handler
+    from app.group_manager.service import group_manager_service
+    old_store = group_manager_service.store
+    group_manager_service.store = store
+    try:
+        judge, reply = asyncio.run(_backfill_handler(None, {"raw_message": "/backfill 111", "group_id": "g", "user_id": "u"}))
+        check("/backfill 指定群", judge and "111" in reply and "补记录完成" in reply, reply)
+    finally:
+        group_manager_service.store = old_store
+
+
 if __name__ == "__main__":
     test_config_defaults()
     test_member_join_flow()
@@ -309,5 +355,6 @@ if __name__ == "__main__":
     test_auto_approve()
     test_query_and_commands()
     test_event_bus_integration()
+    test_backfill()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)

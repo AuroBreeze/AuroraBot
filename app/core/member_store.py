@@ -66,6 +66,20 @@ class MemberStore:
         )
         conn.commit()
 
+    def ensure_member(self, group_id, user_id) -> bool:
+        """
+        存量成员补齐：仅当记录不存在时写入（INSERT OR IGNORE），
+        保留已有成员的 join_time/extras 不被覆盖。返回是否新增。
+        """
+        conn = self._get_connection()
+        cursor = conn.execute(
+            "INSERT OR IGNORE INTO group_members (group_id, user_id, join_time, last_active, extras) "
+            "VALUES (?, ?, ?, NULL, '{}')",
+            (str(group_id), str(user_id), self._now_str()),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
     def record_message(self, group_id, user_id) -> None:
         """更新最后发言时间（仅更新已记录成员；未记录成员忽略）"""
         conn = self._get_connection()

@@ -183,6 +183,48 @@ class GroupManagerService:
 
         return f"用户 {user_id} 不是本群成员"
 
+    # ---------- 存量成员批量补记录 ----------
+
+    async def backfill_group(self, group_id) -> tuple[int, int]:
+        """
+        对单个群批量补记录：拉取真实群成员列表，补齐缺失的 MemberStore 记录。
+        已存在的记录（含 join_time/extras）不被覆盖。
+        :return: (新增数量, 群成员总数)
+        """
+        api = get_api()
+        if api is None:
+            return 0, 0
+        members = await api.get_group_member_list(group_id)
+        added = 0
+        for member in members:
+            user_id = str(member.get("user_id") or "")
+            if user_id and self.store.ensure_member(group_id, user_id):
+                added += 1
+        self.logger.info(f"存量成员补记录 群:{group_id} 新增:{added}/{len(members)}")
+        return added, len(members)
+
+    async def backfill_all(self) -> str:
+        """
+        对所有已授权群批量补记录（仅授权群；未授权群跳过）。
+        返回结果描述。
+        """
+        api = get_api()
+        if api is None:
+            return "⚠️ API 不可用，无法补记录"
+        from app.permission import permission_service
+
+        lines = []
+        total_added = 0
+        for group_id in await api.get_group_list():
+            if not permission_service.check_group_authorized(group_id):
+                lines.append(f"群 {group_id}: 未授权，跳过")
+                continue
+            added, total = await self.backfill_group(group_id)
+            total_added += added
+            lines.append(f"群 {group_id}: 补记录 {added}/{total}")
+        lines.insert(0, f"✅ 存量成员补记录完成，共新增 {total_added} 条")
+        return "\n".join(lines)
+
     # ---------- 工具 ----------
 
     @staticmethod
