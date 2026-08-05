@@ -53,8 +53,9 @@ class StubPerm:
 
 class FakeRuntimeAPI:
     """registry._reply 经 runtime.get_api() 发送消息的 fake"""
-    def __init__(self, ws):
+    def __init__(self, ws, member_roles=None):
         self.ws = ws
+        self.member_roles = member_roles or {}  # user_id -> role
 
     async def send_group_message(self, group_id, text):
         import json
@@ -63,6 +64,9 @@ class FakeRuntimeAPI:
             "params": {"group_id": group_id, "message": [{"type": "text", "data": {"text": text}}]},
         }))
         return 1
+
+    async def get_group_member_list(self, group_id):
+        return [{"user_id": uid, "role": role} for uid, role in self.member_roles.items()]
 
 
 def msg(raw, group="g1", user="u1"):
@@ -195,6 +199,56 @@ def test_help_filter_and_group():
         registry_mod.permission_service = old_perm
     # 不存在命令
     check("未知命令提示", "未找到命令" in r.help_text("g1", "admin", "/nope"))
+
+
+def test_group_privileged_perm():
+    print("\n[4b] 本群管理权限（LEVEL_GROUP_PRIVILEGED）鉴权")
+    import sys
+    from app.core.permission.constants import LEVEL_GROUP_PRIVILEGED
+    from app.core.runtime import set_api
+    registry_mod = sys.modules["app.core.commands.registry"]
+    r = CommandRegistry()
+
+    async def h(ws, m):
+        return True, "ok"
+
+    r.register(Command(name="/gp", handler=h, required_level=LEVEL_GROUP_PRIVILEGED))
+    old_perm = registry_mod.permission_service
+
+    def run_dispatch(perm, roles=None, uid="u1"):
+        registry_mod.permission_service = perm  # 每个用例独立设置权限 stub
+        async def _run():
+            ws = FakeWS()
+            api = FakeRuntimeAPI(ws, member_roles=roles or {"u1": "member"})
+            set_api(api)
+            return ws, await r.dispatch(ws, {"raw_message": "/gp", "group_id": "g1", "user_id": uid})
+        return asyncio.run(_run())
+
+    try:
+        # 系统管理员 → 可执行
+        ws, handled = run_dispatch(StubPerm(allowed=False, is_admin=True))
+        check("系统管理员可执行", handled and any("ok" in (m["params"]["message"][0]["data"]["text"] if m.get("params") else "") for m in ws.sent), str(ws.sent))
+
+        # 本群 2 级（权限记录）→ 可执行
+        class Level2Perm:
+            def is_admin(self, u): return False
+            def check_user_permission(self, g, u, level): return level == 2
+        ws, handled = run_dispatch(Level2Perm())
+        check("本群2级可执行", handled and len(ws.sent) == 1 and "ok" in ws.sent[0]["params"]["message"][0]["data"]["text"], str(ws.sent))
+
+        # 本群 role=admin（无权限记录）→ 可执行（经 API 查询）
+        class NoPerm:
+            def is_admin(self, u): return False
+            def check_user_permission(self, g, u, level): return False
+        ws, handled = run_dispatch(NoPerm(), roles={"u1": "admin"})
+        check("本群管理员(role)可执行", handled and len(ws.sent) == 1 and "ok" in ws.sent[0]["params"]["message"][0]["data"]["text"], str(ws.sent))
+
+        # 普通成员 → 权限不足
+        ws, handled = run_dispatch(NoPerm(), roles={"u1": "member"})
+        check("普通成员被拒", handled and len(ws.sent) == 1 and "权限不足" in ws.sent[0]["params"]["message"][0]["data"]["text"], str(ws.sent))
+    finally:
+        registry_mod.permission_service = old_perm
+        set_api(None)
 
 
 def test_handler_exception_handled():
@@ -349,6 +403,7 @@ if __name__ == "__main__":
     test_match()
     test_dispatch_auth_and_reply()
     test_help_filter_and_group()
+    test_group_privileged_perm()
     test_handler_exception_handled()
     test_validation_rejects_bad_commands()
     test_audit_and_prefix_conflict()

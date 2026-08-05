@@ -14,11 +14,14 @@
 
 from api.Logger_owner import Logger
 from app.core.permission import permission_service
-from app.core.permission.constants import LEVEL_SYSTEM, LEVEL_OWNER, LEVEL_ADMIN, LEVEL_NONE
+from app.core.permission.constants import (
+    LEVEL_GROUP_PRIVILEGED, LEVEL_SYSTEM, LEVEL_OWNER, LEVEL_ADMIN, LEVEL_NONE,
+)
 from .model import Command, CommandHandler
 
 # 权限级别名称（帮助菜单展示）
 LEVEL_NAMES = {
+    LEVEL_GROUP_PRIVILEGED: "系统管理员/本群管理权限",
     LEVEL_SYSTEM: "系统管理员",
     LEVEL_OWNER: "群主",
     LEVEL_ADMIN: "群管理员",
@@ -110,8 +113,8 @@ class CommandRegistry:
             problems.append(f"命令名不能含空格: '{cmd.name}'")
         if not callable(cmd.handler):
             problems.append("handler 必须可调用")
-        if not (1 <= cmd.required_level <= LEVEL_NONE):
-            problems.append(f"required_level 非法: {cmd.required_level}（应为 1-{LEVEL_NONE}）")
+        if not (LEVEL_GROUP_PRIVILEGED <= cmd.required_level <= LEVEL_NONE):
+            problems.append(f"required_level 非法: {cmd.required_level}（应为 {LEVEL_GROUP_PRIVILEGED}-{LEVEL_NONE}）")
         for sub, desc in (cmd.sub_commands or {}).items():
             if not isinstance(desc, str) or not desc.strip():
                 problems.append(f"子命令 '{sub}' 缺少说明")
@@ -223,7 +226,12 @@ class CommandRegistry:
         user_id = str(message.get("user_id"))
 
         # 统一鉴权（required_level=LEVEL_NONE 表示无需权限）
-        if cmd.required_level < LEVEL_NONE:
+        if cmd.required_level == LEVEL_GROUP_PRIVILEGED:
+            if not await self._check_group_privileged(group_id, user_id):
+                await self._reply(websocket, group_id,
+                                  f"权限不足：命令 {cmd.name} 需要『{LEVEL_NAMES.get(cmd.required_level)}』权限")
+                return True
+        elif cmd.required_level < LEVEL_NONE:
             if not permission_service.check_user_permission(group_id, user_id, cmd.required_level):
                 need = LEVEL_NAMES.get(cmd.required_level, str(cmd.required_level))
                 await self._reply(websocket, group_id,
@@ -240,6 +248,24 @@ class CommandRegistry:
         if reply:
             await self._reply(websocket, group_id, reply)
         return True
+
+    async def _check_group_privileged(self, group_id, user_id) -> bool:
+        """LEVEL_GROUP_PRIVILEGED 鉴权：系统管理员 或 本群管理权限者
+        （Lssuing 2 级 或 本群 role=owner/admin 的真实群管）"""
+        if permission_service.is_admin(user_id):
+            return True
+        if permission_service.check_user_permission(group_id, user_id, 2):
+            return True
+        try:
+            from app.core.runtime import get_api
+            api = get_api()
+            if api is None:
+                return False
+            members = await api.get_group_member_list(group_id)
+            return any(str(m.get("user_id")) == user_id and m.get("role") in ("owner", "admin")
+                       for m in members)
+        except Exception:
+            return False
 
     # ---------- 帮助 ----------
 
@@ -321,6 +347,8 @@ class CommandRegistry:
 
     def _can_see(self, group_id, user_id, cmd: Command) -> bool:
         """调用者是否能在帮助中看到该命令"""
+        if cmd.required_level == LEVEL_GROUP_PRIVILEGED:
+            return self._is_privileged(group_id, user_id)  # 同步判定（不含 role API 查询）
         if cmd.required_level >= LEVEL_NONE:
             return True
         return permission_service.check_user_permission(group_id, user_id, cmd.required_level)

@@ -3,6 +3,7 @@
 from app.core.timeutil import TIME_FORMAT
 
 # 权限级别：数字越小权限越高
+LEVEL_GROUP_PRIVILEGED = 0  # 系统管理员 或 本群管理权限者（role owner/admin 或 Lssuing 2 级）
 LEVEL_SYSTEM = 1   # 系统管理员（多管理员表 admin_users）
 LEVEL_OWNER = 2    # 群主 / 付费用户
 LEVEL_ADMIN = 3    # 群管理员

@@ -2,7 +2,7 @@
 
 from app.core.commands import registry, Command
 from app.core.hot_reload import hot_reloader
-from app.core.permission.constants import LEVEL_SYSTEM, LEVEL_ADMIN, LEVEL_NONE
+from app.core.permission.constants import LEVEL_GROUP_PRIVILEGED, LEVEL_SYSTEM, LEVEL_ADMIN, LEVEL_NONE
 from . import events  # noqa: F401  （确保事件订阅注册；events 为接线层，不纳入热更新）
 from .service import group_manager_service
 from . import config as gm_config
@@ -149,7 +149,7 @@ def _register():
         detail="拉取真实群成员列表，补齐 MemberStore 缺失的成员记录\n"
                "（已存在记录不被覆盖；仅处理已授权群）。",
         example="/backfill\n/backfill 123456789",
-        required_level=LEVEL_SYSTEM, app_name=APP,
+        required_level=LEVEL_GROUP_PRIVILEGED, app_name=APP,
     ))
     registry.register(Command(
         name="/active",
@@ -220,7 +220,7 @@ def _register():
         detail="立即刷新成员最后活跃时间与昵称（无视 active_sync_enabled 开关）。\n"
                "指定群号只刷新该群；无参数刷新全部授权群。",
         example="/sync_active\n/sync_active 736038975",
-        required_level=LEVEL_ADMIN, app_name=APP,
+        required_level=LEVEL_GROUP_PRIVILEGED, app_name=APP,
     ))
     registry.register(Command(
         name="/at_all",
