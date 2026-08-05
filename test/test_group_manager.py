@@ -510,8 +510,9 @@ def test_inactive_kick():
     conn = store._get_connection()
     conn.execute("UPDATE group_members SET last_active=? WHERE group_id='g1' AND user_id='uOld'", (ts(10),))
     store.record_join("g1", "uRmd", join_time=ts(6))
+    conn.execute("UPDATE group_members SET last_active=? WHERE group_id='g1' AND user_id='uRmd'", (ts(6),))
     store.record_join("g1", "uNew", join_time=ts(2))
-    store.record_join("g1", "uNoActive", join_time=ts(9))   # 无活跃记录，按入群 9 天超期
+    store.record_join("g1", "uNoActive", join_time=ts(9))   # 无发言记录 → 不参与不活跃判定（防误踢）
     store.record_join("g1", "uOwner", join_time=ts(15))     # 群主，跳过
     store.record_join("g1", "uAdmin", join_time=ts(15))     # 管理员，跳过
     store.record_join("g1", "uVip", join_time=ts(15))       # 有权限用户，跳过
@@ -559,7 +560,7 @@ def test_inactive_kick():
 
     kicked = [k[1] for k in api.kicked]
     check("超期成员被踢（有活跃记录）", "uOld" in kicked, str(kicked))
-    check("无活跃记录按入群超期被踢", "uNoActive" in kicked, str(kicked))
+    check("无发言记录不踢（防误踢）", "uNoActive" not in kicked, str(kicked))
     check("未超期不踢", "uNew" not in kicked and "uRmd" not in kicked, str(kicked))
     check("群主跳过", "uOwner" not in kicked, str(kicked))
     check("管理员跳过", "uAdmin" not in kicked, str(kicked))
@@ -594,12 +595,12 @@ def test_inactive_list_and_kick():
     tz = pytz.timezone("Asia/Shanghai")
     now = datetime.now(tz)
     fmt = lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S")
-    # 无发言记录 → 按入群时间兜底计未活跃天数（bot 9001 不应出现在列表）
-    store.record_join("g1", "1001", fmt(now - timedelta(days=15)))
+    # 真实发言记录构造：last_active 历史值 → 未活跃天数（bot 9001 不应出现在列表）
+    store.upsert_member("g1", "1001", join_time=fmt(now - timedelta(days=15)), last_active=fmt(now - timedelta(days=15)))
     store.record_join("g1", "1002", fmt(now - timedelta(days=9)))
-    store.record_join("g1", "1003", fmt(now - timedelta(days=3)))
-    store.record_join("g1", "1004", fmt(now - timedelta(days=20)))
-    store.record_join("g1", "1005", fmt(now - timedelta(days=12)))
+    store.upsert_member("g1", "1003", join_time=fmt(now - timedelta(days=3)), last_active=fmt(now - timedelta(days=3)))
+    store.upsert_member("g1", "1004", join_time=fmt(now - timedelta(days=20)), last_active=fmt(now - timedelta(days=20)))
+    store.upsert_member("g1", "1005", join_time=fmt(now - timedelta(days=12)), last_active=fmt(now - timedelta(days=12)))
     store.record_join("g1", "9001", fmt(now - timedelta(days=30)))
     store.record_message("g1", "1002")  # 有活跃记录（今天）→ 0 天，应被过滤
 
@@ -611,9 +612,9 @@ def test_inactive_list_and_kick():
     check("今日活跃成员被过滤", "1002" not in text.splitlines()[1:] and "未活跃 0 天" not in text, text)
     check("机器人自己不出现在列表", "9001" not in text, text)
 
-    # 分页：再入 12 人 → 共 16 人 → 2 页
+    # 分页：再入 12 人（10 天前发言）→ 共 15 人 → 2 页
     for i in range(12):
-        store.record_join("g1", f"70{i:02d}", fmt(now - timedelta(days=10)))
+        store.upsert_member("g1", f"70{i:02d}", join_time=fmt(now - timedelta(days=10)), last_active=fmt(now - timedelta(days=10)))
     # 未指定页码 → 全部列出
     text_all = svc.list_inactive_members("g1", 7)
     check("默认全部列出：标题无页码", "第" not in text_all.splitlines()[0] and "共 15 人" in text_all.splitlines()[0], text_all.splitlines()[0])

@@ -359,7 +359,8 @@ class GroupManagerService:
     async def scan_inactive_members(self) -> None:
         """
         定期扫描：群成员不活跃超期 → 踢出（后台周期任务）。
-        - 超期判定：last_active 为空时按 join_time 兜底（全部超期都踢）
+        - 超期判定：仅按 last_active（真实发言记录）判定；无发言记录（NULL）不参与，
+          由入群观察期负责新成员，避免重置/补录后 join_time 兜底误踢老成员
         - 排除：bot 自己 / 群主与管理员（role）/ 有权限用户（Lssuing 2/3 级）
         - 踢前提醒：剩余天数 <= inactive_remind_days 时 @ 提醒（当天不重复）
         """
@@ -387,14 +388,11 @@ class GroupManagerService:
                 if self._kick_reason(group_id, uid, role_map):
                     continue
 
-                # 不活跃时长：有活跃记录用 last_active，否则按 join_time 兜底
-                last = member["last_active"] or member["join_time"]
+                # 不活跃时长：仅真实发言记录；无发言记录跳过（防误踢）
+                last = member["last_active"]
                 if not last:
                     continue
-                try:
-                    last_dt = timeutil.parse_local(last)
-                except ValueError:
-                    last_dt = None
+                last_dt = timeutil.parse_local(last)
                 if last_dt is None:
                     continue
                 inactive = (now - last_dt).days
@@ -424,14 +422,11 @@ class GroupManagerService:
     # ---------- 不活跃成员列表 / 批量踢人 ----------
 
     def _member_inactive_days(self, member: dict, now: datetime):
-        """成员未活跃天数；无活跃记录按入群时间兜底；无法解析返回 None"""
-        last = member.get("last_active") or member.get("join_time")
+        """成员未活跃天数；仅按真实发言记录（last_active）；无记录/无法解析返回 None"""
+        last = member.get("last_active")
         if not last:
             return None
-        try:
-            last_dt = timeutil.parse_local(last)
-        except ValueError:
-            last_dt = None
+        last_dt = timeutil.parse_local(last)
         if last_dt is None:
             return None
         return (now - last_dt).days
