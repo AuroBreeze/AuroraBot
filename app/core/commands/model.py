@@ -19,11 +19,14 @@ class Command:
     example: str = ""            # 使用示例（/help <命令> 展示，多行）
     required_level: int = 3      # 所需权限级别（1=管理员 2=群主 3=群管理员 4=所有人）
     app_name: str = ""           # 所属 app（帮助分组名）
+    cn_name: str = ""            # 中文命令名（/菜单 显示，注册时自动加入别名可执行）
     aliases: list = field(default_factory=list)   # 别名（如 "list_user"）
     sub_commands: dict = field(default_factory=dict)  # 子命令名 -> 说明（帮助展示）
 
     def __post_init__(self):
-        # 主命令名与别名必须互不相同且不重复
+        # 主命令名与别名必须互不相同；cn_name 若与别名重复则视为同一入口（允许）
         keys = [self.name] + list(self.aliases)
+        if self.cn_name and self.cn_name != self.name and self.cn_name not in self.aliases:
+            keys.append(self.cn_name)
         if len(set(keys)) != len(keys):
             raise ValueError(f"命令 {self.name} 的别名存在重复")

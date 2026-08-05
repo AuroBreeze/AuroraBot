@@ -251,6 +251,45 @@ def test_group_privileged_perm():
         set_api(None)
 
 
+def test_menu_and_cn_name():
+    print("\n[4c] 中文菜单 + 中文命令（cn_name 自动别名，与英文一致）")
+    import sys
+    registry_mod = sys.modules["app.core.commands.registry"]
+    r = CommandRegistry()
+
+    async def h(ws, m):
+        return True, "ok"
+
+    r.register(Command(name="/kick", aliases=["kick"], cn_name="踢人", handler=h,
+                       description="批量踢人", required_level=LEVEL_ADMIN, app_name="群管"))
+    r.register(Command(name="/menu", cn_name="菜单", handler=h, required_level=LEVEL_NONE, app_name="系统"))
+    old_perm = registry_mod.permission_service
+    registry_mod.permission_service = StubPerm(allowed=True)
+    try:
+        # 中文名自动成为别名 → 中文命令命中同一 handler
+        cmd = r.match("踢人 1 2")
+        check("中文命令命中 /kick", cmd is not None and cmd.name == "/kick", str(cmd))
+        check("cn_name 已加入别名", "踢人" in cmd.aliases, cmd.aliases)
+
+        # 菜单：中文名 + 描述 + 权限过滤
+        text = r.menu_text("g1", "admin")
+        check("菜单含中文命令名", "踢人 - 批量踢人" in text, text)
+        check("菜单标注管理员", "菜单（管理员）" in text, text)
+        # 菜单不含元命令条目（提示行含 /kick 是设计文本）
+        check("菜单不含元命令条目", "/menu -" not in text and "/kick -" not in text, text)
+
+        # 非权限者菜单：无权限命令被过滤
+        class NoPerm2:
+            def is_admin(self, u): return False
+            def check_user_permission(self, g, u, level): return False
+        registry_mod.permission_service = NoPerm2()
+        text2 = r.menu_text("g1", "u9")
+        check("成员菜单过滤管理命令", "踢人 -" not in text2, text2)
+        check("成员菜单标注", "菜单（成员）" in text2, text2)
+    finally:
+        registry_mod.permission_service = old_perm
+
+
 def test_handler_exception_handled():
     print("\n[5] handler 异常不中断分发")
     r = CommandRegistry()
@@ -404,6 +443,7 @@ if __name__ == "__main__":
     test_dispatch_auth_and_reply()
     test_help_filter_and_group()
     test_group_privileged_perm()
+    test_menu_and_cn_name()
     test_handler_exception_handled()
     test_validation_rejects_bad_commands()
     test_audit_and_prefix_conflict()

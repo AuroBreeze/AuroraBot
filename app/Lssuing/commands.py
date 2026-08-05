@@ -27,6 +27,7 @@ def _register():
     # ---- 系统管理员（1 级）：群组与用户授权管理 ----
     registry.register(Command(
         name="/check_groups",
+        cn_name="检查群组",
         aliases=["check_groups", "check_group_list"],
         handler=partial(admin_group.check_group_list_and_kick),
         description="检查并踢出过期授权群",
@@ -38,6 +39,7 @@ def _register():
     ))
     registry.register(Command(
         name="/grant",
+        cn_name="授权用户",
         aliases=["grant", "raise_user"],
         handler=partial(admin_user.raise_user_permission),
         description="跨群设置用户权限",
@@ -50,6 +52,7 @@ def _register():
     ))
     registry.register(Command(
         name="/remove_user",
+        cn_name="移除用户",
         aliases=["remove_user"],
         handler=partial(admin_user.remove_user_permission),
         description="跨群移除用户权限",
@@ -60,6 +63,7 @@ def _register():
     ))
     registry.register(Command(
         name="/sub_group",
+        cn_name="订阅群组",
         aliases=["sub_group"],
         handler=partial(admin_group.authorize_group_simple),
         description="登记授权群组（简单版：now 起生效，功能 all）",
@@ -76,6 +80,7 @@ def _register():
     ))
     registry.register(Command(
         name="/subscribe_group",
+        cn_name="完整订阅",
         aliases=["subscribe"],
         handler=partial(admin_group.authorize_group),
         description="登记授权群组（完整版：可指定起止时间与功能）",
@@ -92,6 +97,7 @@ def _register():
     ))
     registry.register(Command(
         name="/unsub",
+        cn_name="取消订阅",
         aliases=["unsub", "unsubscribe", "unsubscribe_group"],
         handler=partial(admin_group.remove_authorization),
         description="取消群组授权（级联删除该群权限）",
@@ -104,6 +110,7 @@ def _register():
     # ---- 群主（2 级）：本群用户权限管理 ----
     registry.register(Command(
         name="/promote",
+        cn_name="提升权限",
         aliases=["promote"],
         handler=partial(user_user.raise_user_permission),
         description="将本群用户提升为群管理员",
@@ -115,6 +122,7 @@ def _register():
     ))
     registry.register(Command(
         name="/revoke",
+        cn_name="撤销权限",
         aliases=["revoke"],
         handler=partial(user_user.remove_user_permission),
         description="移除本群低一级用户的权限",
@@ -127,6 +135,7 @@ def _register():
     # ---- 群管理员（3 级）：本群信息查询 ----
     registry.register(Command(
         name="/group_info",
+        cn_name="群组信息",
         aliases=["group_info"],
         handler=partial(user_group.check_group_information),
         description="查看本群授权信息",
@@ -137,6 +146,7 @@ def _register():
     ))
     registry.register(Command(
         name="/list_users",
+        cn_name="用户列表",
         aliases=["list_users", "list_user"],
         handler=partial(user_group.list_user_permissions),
         description="列出群组授权用户（仅本群或管理员）",

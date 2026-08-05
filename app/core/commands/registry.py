@@ -75,6 +75,9 @@ class CommandRegistry:
 
     def register(self, cmd: Command) -> bool:
         """注册命令：先做格式校验，再做同名/别名冲突检测；冲突不覆盖、记录在案"""
+        # 中文命令名自动纳入别名（中文操作与英文一致）
+        if cmd.cn_name and cmd.cn_name not in cmd.aliases:
+            cmd.aliases.append(cmd.cn_name)
         # 格式校验
         problems = self._validate(cmd)
         if problems:
@@ -301,6 +304,30 @@ class CommandRegistry:
         if not is_privileged:
             lines.append("提示：管理命令（订阅/踢人/刷新/配置等）需要群管理权限")
         lines.append("输入 /help <命令名> 查看命令详情")
+        return "\n".join(lines)
+
+    def menu_text(self, group_id, user_id) -> str:
+        """中文命令菜单：按 app 分组列出调用者有权限的命令（显示中文名，与英文功能一致）"""
+        lines = [f"菜单（{'管理员' if self._is_privileged(group_id, user_id) else '成员'}）\n"]
+        grouped: dict[str, list[Command]] = {}
+        is_privileged = self._is_privileged(group_id, user_id)
+        for cmd in self._commands.values():
+            if cmd.name in ("/help", "/menu"):
+                continue
+            if not is_privileged and not self._can_see(group_id, user_id, cmd):
+                continue
+            grouped.setdefault(cmd.app_name or "其他", []).append(cmd)
+
+        for app_name, cmds in grouped.items():
+            lines.append(f"{app_name}")
+            for cmd in sorted(cmds, key=lambda c: (c.required_level, c.name)):
+                cn = cmd.cn_name or cmd.name
+                lines.append(f"  {cn} - {cmd.description}")
+            lines.append("")
+
+        if len(lines) == 1:
+            lines.append("暂无可用命令，请联系管理员开通权限")
+        lines.append("提示：中文命令与英文命令功能一致（如 /踢人 同 /kick）")
         return "\n".join(lines)
 
     def _is_privileged(self, group_id, user_id) -> bool:

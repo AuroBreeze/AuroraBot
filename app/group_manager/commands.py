@@ -131,6 +131,7 @@ async def _at_all_handler(websocket, message) -> tuple[bool, str]:
 def _register():
     registry.register(Command(
         name="/members",
+        cn_name="成员档案",
         aliases=["members"],
         handler=_members_handler,
         description="批量显示本群成员信息（加入/活跃/段位/段位时间）",
@@ -142,6 +143,7 @@ def _register():
     ))
     registry.register(Command(
         name="/backfill",
+        cn_name="补记录",
         aliases=["backfill"],
         handler=_backfill_handler,
         description="存量成员批量补记录",
@@ -153,6 +155,7 @@ def _register():
     ))
     registry.register(Command(
         name="/active",
+        cn_name="查活跃",
         aliases=["active"],
         handler=_active_handler,
         description="查看成员活跃信息（入群时间/最后发言/段位）",
@@ -164,6 +167,7 @@ def _register():
     ))
     registry.register(Command(
         name="/tier",
+        cn_name="查段位",
         aliases=["tier"],
         handler=_tier_handler,
         description="查看成员游戏段位",
@@ -175,6 +179,7 @@ def _register():
     ))
     registry.register(Command(
         name="/gm_config",
+        cn_name="群管配置",
         aliases=["gm_config", "群管配置"],
         handler=_gm_config_handler,
         description="查看/修改群管配置（无需重启，立即生效）",
@@ -187,6 +192,7 @@ def _register():
     ))
     registry.register(Command(
         name="/inactive",
+        cn_name="不活跃列表",
         aliases=["inactive", "不活跃"],
         handler=_inactive_handler,
         description="列出本群不活跃成员（@+未活跃天数，降序）",
@@ -199,6 +205,7 @@ def _register():
     ))
     registry.register(Command(
         name="/kick",
+        cn_name="踢人",
         aliases=["kick", "踢人"],
         handler=_kick_handler,
         description="批量移出不活跃/指定成员（@ / QQ号 / 列表序号）",
@@ -213,6 +220,7 @@ def _register():
     ))
     registry.register(Command(
         name="/sync_active",
+        cn_name="同步活跃",
         aliases=["sync_active", "同步活跃"],
         handler=_sync_active_handler,
         description="手动强制刷新授权群成员活跃（last_sent_time/nickname）",
@@ -224,6 +232,7 @@ def _register():
     ))
     registry.register(Command(
         name="/at_all",
+        cn_name="全体",
         aliases=["atall", "全体"],
         handler=_at_all_handler,
         description="@ 全体转发文字（所有群成员可用）",
