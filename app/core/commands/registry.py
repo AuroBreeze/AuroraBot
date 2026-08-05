@@ -233,7 +233,8 @@ class CommandRegistry:
 
         for app_name, cmds in grouped.items():
             lines.append(f"🔹 {app_name}")
-            for cmd in cmds:
+            # 组内排序：权限级别（1=管理员最高）→ 命令名
+            for cmd in sorted(cmds, key=lambda c: (c.required_level, c.name)):
                 lines.append(self._format_cmd_line(cmd))
             lines.append("")
 
@@ -277,8 +278,10 @@ class CommandRegistry:
         if cmd.sub_commands:
             subs = " / ".join(f"{name} {s}" for s in cmd.sub_commands)
             return f"  {subs} - {cmd.description}{perm}"
-        usage = f" {cmd.usage}" if cmd.usage else ""
-        return f"  {name}{usage} - {cmd.description}{perm}"
+        # 多行用法（如完整版 subscribe_group）在菜单只显示第一行
+        usage = cmd.usage.splitlines()[0] if cmd.usage else ""
+        cmd_part = f"{name} {usage}".strip()
+        return f"  {cmd_part:<30}- {cmd.description}{perm}"
 
     # ---------- 内部 ----------
 

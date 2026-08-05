@@ -1,4 +1,8 @@
-"""Lssuing 权限系统命令注册（模块导入时执行，供消息分发器统一使用）"""
+"""Lssuing 权限系统命令注册（模块导入时执行，供消息分发器统一使用）
+
+注册顺序按权限级别分组（系统管理员 → 群主 → 群管理员），组内按命令名排序；
+/help 菜单输出时还会按（权限级别, 命令名）再次排序，与注册顺序无关。
+"""
 
 from functools import partial
 
@@ -19,7 +23,31 @@ def _register():
 
     APP = "权限系统"
 
-    # 命令名均为英文，且任意两命令首词不互为前缀（避免混淆告警）
+    # ---- 系统管理员（1 级）：群组与用户授权管理 ----
+    registry.register(Command(
+        name="/check_groups",
+        aliases=["check_groups", "check_group_list"],
+        handler=partial(admin_group.check_group_list_and_kick),
+        description="检查并踢出过期授权群",
+        usage="",
+        required_level=LEVEL_SYSTEM, app_name=APP,
+    ))
+    registry.register(Command(
+        name="/grant",
+        aliases=["grant", "raise_user"],
+        handler=partial(admin_user.raise_user_permission),
+        description="跨群设置用户权限",
+        usage="<目标群号> <目标用户> <级别2或3>",
+        required_level=LEVEL_SYSTEM, app_name=APP,
+    ))
+    registry.register(Command(
+        name="/remove_user",
+        aliases=["remove_user"],
+        handler=partial(admin_user.remove_user_permission),
+        description="跨群移除用户权限",
+        usage="<目标群号> <目标用户>",
+        required_level=LEVEL_SYSTEM, app_name=APP,
+    ))
     registry.register(Command(
         name="/sub_group",
         aliases=["sub_group"],
@@ -44,45 +72,15 @@ def _register():
         usage="<目标群号>",
         required_level=LEVEL_SYSTEM, app_name=APP,
     ))
+
+    # ---- 群主（2 级）：本群用户权限管理 ----
     registry.register(Command(
-        name="/check_groups",
-        aliases=["check_groups", "check_group_list"],
-        handler=partial(admin_group.check_group_list_and_kick),
-        description="检查并踢出过期授权群",
-        usage="",
-        required_level=LEVEL_SYSTEM, app_name=APP,
-    ))
-    registry.register(Command(
-        name="/grant",
-        aliases=["grant", "raise_user"],
-        handler=partial(admin_user.raise_user_permission),
-        description="跨群设置用户权限（系统管理员）",
-        usage="<目标群号> <目标用户> <级别2或3>",
-        required_level=LEVEL_SYSTEM, app_name=APP,
-    ))
-    registry.register(Command(
-        name="/remove_user",
-        aliases=["remove_user"],
-        handler=partial(admin_user.remove_user_permission),
-        description="跨群移除用户权限（系统管理员）",
-        usage="<目标群号> <目标用户>",
-        required_level=LEVEL_SYSTEM, app_name=APP,
-    ))
-    registry.register(Command(
-        name="/list_users",
-        aliases=["list_users", "list_user"],
-        handler=partial(user_group.list_user_permissions),
-        description="列出群组授权用户（仅本群或管理员）",
-        usage="<目标群号>",
-        required_level=LEVEL_ADMIN, app_name=APP,
-    ))
-    registry.register(Command(
-        name="/group_info",
-        aliases=["group_info"],
-        handler=partial(user_group.check_group_information),
-        description="查看本群授权信息",
-        usage="",
-        required_level=LEVEL_ADMIN, app_name=APP,
+        name="/promote",
+        aliases=["promote"],
+        handler=partial(user_user.raise_user_permission),
+        description="将本群用户提升为群管理员",
+        usage="<目标用户>",
+        required_level=LEVEL_OWNER, app_name=APP,
     ))
     registry.register(Command(
         name="/revoke",
@@ -92,13 +90,23 @@ def _register():
         usage="<目标用户>",
         required_level=LEVEL_OWNER, app_name=APP,
     ))
+
+    # ---- 群管理员（3 级）：本群信息查询 ----
     registry.register(Command(
-        name="/promote",
-        aliases=["promote"],
-        handler=partial(user_user.raise_user_permission),
-        description="将本群用户提升为群管理员",
-        usage="<目标用户>",
-        required_level=LEVEL_OWNER, app_name=APP,
+        name="/group_info",
+        aliases=["group_info"],
+        handler=partial(user_group.check_group_information),
+        description="查看本群授权信息",
+        usage="",
+        required_level=LEVEL_ADMIN, app_name=APP,
+    ))
+    registry.register(Command(
+        name="/list_users",
+        aliases=["list_users", "list_user"],
+        handler=partial(user_group.list_user_permissions),
+        description="列出群组授权用户（仅本群或管理员）",
+        usage="<目标群号>",
+        required_level=LEVEL_ADMIN, app_name=APP,
     ))
 
 

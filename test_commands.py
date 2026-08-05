@@ -238,6 +238,42 @@ def test_audit_and_prefix_conflict():
     check("冲突后报告不再说无冲突", "无注册冲突" not in r.report_text())
 
 
+def test_help_sorted_and_aligned():
+    print("\n[8] 帮助排序与对齐")
+    r = CommandRegistry()
+
+    async def h(ws, m):
+        return True, None
+
+    # 乱序注册：不同级别 + 同级不同名
+    r.register(Command(name="/z_level3", handler=h, required_level=LEVEL_ADMIN, app_name="A", description="d3"))
+    r.register(Command(name="/a_level1", handler=h, required_level=LEVEL_SYSTEM, app_name="A", description="d1", usage="<x>"))
+    r.register(Command(name="/m_level2", handler=h, required_level=LEVEL_OWNER, app_name="A", description="d2"))
+    r.register(Command(name="/b_level3", handler=h, required_level=LEVEL_ADMIN, app_name="A", description="d3b"))
+    r.register(Command(name="/a_level3", handler=h, required_level=LEVEL_ADMIN, app_name="A", description="d3a"))
+
+    import sys
+    registry_mod = sys.modules["app.core.commands.registry"]
+    old = registry_mod.permission_service
+    registry_mod.permission_service = StubPerm(allowed=True)
+    try:
+        text = r.help_text("g", "u", "")
+        # 排序：先权限级别（1→2→3），同级按名称
+        i1 = text.index("/a_level1")
+        i2 = text.index("/m_level2")
+        i3 = text.index("/z_level3")
+        check("组内按权限级别排序", i1 < i2 < i3, text)
+        i_a = text.index("/a_level3")
+        i_b = text.index("/b_level3")
+        check("同级按名称排序", i_a < i_b < i3, text)
+        # 对齐：命令列 ljust 后分隔符位置一致
+        lines = [l for l in text.splitlines() if l.startswith("  /")]
+        pos = [l.index(" - ") for l in lines]
+        check("命令列对齐", len(set(pos)) == 1, str(pos))
+    finally:
+        registry_mod.permission_service = old
+
+
 if __name__ == "__main__":
     test_register_and_conflict()
     test_match()
@@ -246,5 +282,6 @@ if __name__ == "__main__":
     test_handler_exception_handled()
     test_validation_rejects_bad_commands()
     test_audit_and_prefix_conflict()
+    test_help_sorted_and_aligned()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)
