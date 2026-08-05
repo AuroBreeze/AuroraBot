@@ -7,7 +7,7 @@ class UserService:
     def __init__(self):
         self.logger = Logger("Lssuing_user_service")
 
-    async def raise_user_permission(self, message) -> tuple[bool, str]:
+    async def raise_user_permission(self, websocket, message) -> tuple[bool, str]:
         """改变用户群组权限（跨群，仅系统管理员）"""
         msg = str(message.get("raw_message"))
         parts = msg.split()
@@ -26,7 +26,7 @@ class UserService:
 
         return permission_service.admin_raise_user(user_id, target_group_id, target_user, level)
 
-    async def remove_user_permission(self, message) -> tuple[bool, str]:
+    async def remove_user_permission(self, websocket, message) -> tuple[bool, str]:
         """取消用户权限（跨群，仅系统管理员）"""
         msg = str(message.get("raw_message"))
         parts = msg.split()

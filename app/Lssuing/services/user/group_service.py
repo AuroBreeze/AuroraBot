@@ -7,7 +7,7 @@ class GroupService:
     def __init__(self):
         self.logger = Logger("Lssuing_group_service")
 
-    async def list_user_permissions(self, message) -> tuple[bool, str]:
+    async def list_user_permissions(self, websocket, message) -> tuple[bool, str]:
         """
         列出群组所有的授权用户（仅限本群用户或系统管理员，防跨群枚举）
         """
@@ -33,7 +33,7 @@ class GroupService:
         rows = "\n".join(f"{user}\t{level}\t{parent}" for user, level, parent in user_list)
         return True, f"{header}\n{rows}"
 
-    async def check_group_information(self, message) -> tuple[bool, str]:
+    async def check_group_information(self, websocket, message) -> tuple[bool, str]:
         """
         检查群组信息
         """

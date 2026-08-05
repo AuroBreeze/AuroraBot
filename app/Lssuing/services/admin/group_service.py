@@ -1,8 +1,10 @@
 from datetime import datetime
 import pytz
 from api.Logger_owner import Logger
+from api.Botapi import QQAPI_list
 from config.env import TIMEZONE
 from app.permission import permission_service
+from app.permission.constants import LEVEL_OWNER
 
 class GroupService:
     """1级（系统管理员）群组服务层：群组授权管理（命令 handler，不负责发送）"""
@@ -11,7 +13,31 @@ class GroupService:
         self.logger = Logger("Lssuing_group_service")
         self.bj_tz = pytz.timezone(TIMEZONE)
 
-    async def authorize_group(self, message) -> tuple[bool, str]:
+    async def _find_group_owner(self, websocket, group_id) -> str | None:
+        """查询真实群主 QQ（role=owner）；查询失败返回 None 不影响主流程"""
+        try:
+            members = await QQAPI_list(websocket).get_group_member_list(group_id)
+            for member in members:
+                if member.get("role") == "owner":
+                    return str(member.get("user_id"))
+        except Exception as e:
+            self.logger.error(f"查询群 {group_id} 群主失败: {e}")
+        return None
+
+    async def _auto_grant_group_owner(self, websocket, operator_id, target_group, owner_id) -> None:
+        """
+        混合授权模式：自动识别真实群主并授予 2 级权限（与显式获权用户不同时）。
+        查询/授权失败仅告警，不阻断主流程。
+        """
+        group_owner = await self._find_group_owner(websocket, target_group)
+        if group_owner and group_owner != owner_id:
+            judge, msg = permission_service.admin_raise_user(operator_id, target_group, group_owner, LEVEL_OWNER)
+            if judge:
+                self.logger.info(f"群主 {group_owner} 已自动获得群 {target_group} 的 2 级权限")
+            else:
+                self.logger.warning(f"群主 {group_owner} 自动授权失败: {msg}")
+
+    async def authorize_group(self, websocket, message) -> tuple[bool, str]:
         """处理群组授权（完整版，多行参数）"""
         msg = str(message.get("raw_message"))
         parts = msg.split()
@@ -41,7 +67,7 @@ class GroupService:
             return False, "endtime 必须是整数天数"
 
         # 权限与时间校验由权限门面统一完成
-        return permission_service.subscribe_group(
+        judge, result = permission_service.subscribe_group(
             operator_id=user_id,
             target_group=data['subscribe_group'],
             owner_id=data['user_id'],
@@ -49,8 +75,12 @@ class GroupService:
             end_time_days=endtime_days,
             features=data['features'],
         )
+        if judge:
+            # 混合模式：自动授予真实群主 2 级权限
+            await self._auto_grant_group_owner(websocket, user_id, data['subscribe_group'], data['user_id'])
+        return judge, result
 
-    async def authorize_group_simple(self, message) -> tuple[bool, str]:
+    async def authorize_group_simple(self, websocket, message) -> tuple[bool, str]:
         """
         简单版群授权：/sub_group <目标群号> <天数> [获权用户]
         默认 starttime=now、features=all；获权用户缺省为命令执行者
@@ -70,17 +100,22 @@ class GroupService:
         if days < 0:
             return False, "天数不能为负数"
         owner_id = parts[3] if len(parts) > 3 else str(message.get("user_id"))
+        operator_id = str(message.get("user_id"))
 
-        return permission_service.subscribe_group(
-            operator_id=str(message.get("user_id")),
+        judge, result = permission_service.subscribe_group(
+            operator_id=operator_id,
             target_group=target_group,
             owner_id=owner_id,
             start_time="now",
             end_time_days=days,
             features="all",
         )
+        if judge:
+            # 混合模式：自动授予真实群主 2 级权限
+            await self._auto_grant_group_owner(websocket, operator_id, target_group, owner_id)
+        return judge, result
 
-    async def remove_authorization(self, message) -> tuple[bool, str]:
+    async def remove_authorization(self, websocket, message) -> tuple[bool, str]:
         """删除群组授权"""
         msg = str(message.get("raw_message"))
         parts = msg.split()
@@ -95,7 +130,7 @@ class GroupService:
 
         return permission_service.unsubscribe_group(user_id, target_group)
 
-    async def check_group_list_and_kick(self, message) -> tuple[bool, str]:
+    async def check_group_list_and_kick(self, websocket, message) -> tuple[bool, str]:
         """
         检查群组列表并踢出不在授权列表中的群组
         """

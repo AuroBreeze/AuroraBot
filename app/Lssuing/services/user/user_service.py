@@ -7,7 +7,7 @@ class UserService:
     def __init__(self):
         self.logger = Logger("Lssuing_group_service")
 
-    async def remove_user_permission(self, message) -> tuple[bool, str]:
+    async def remove_user_permission(self, websocket, message) -> tuple[bool, str]:
         """
         移除用户权限,仅能移除本群的低一级的其他人
         """
@@ -28,7 +28,7 @@ class UserService:
             return True, f"成功移除用户{target_user_id}的权限"
         return False, msg_or_err
 
-    async def raise_user_permission(self, message) -> tuple[bool, str]:
+    async def raise_user_permission(self, websocket, message) -> tuple[bool, str]:
         """
         提升用户权限,仅能提升本群的低一级的其他人
         """

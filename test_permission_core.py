@@ -153,7 +153,7 @@ def test_admin_raise_cross_group():
 
 
 def test_simple_subscribe_command():
-    print("\n[7] 简单版群授权命令 /sub_group")
+    print("\n[7] 简单版群授权命令 /sub_group（含群主自动授权）")
     from app.Lssuing.services.admin.group_service import GroupService
     import app.Lssuing.services.admin.group_service as group_svc_mod
 
@@ -161,21 +161,36 @@ def test_simple_subscribe_command():
     svc = PermissionService(PermissionStore(os.path.join(tmp, "t.db")))
     svc.store.seed_admin(ADMIN)
 
+    # 模拟 OneBot 群成员查询：群 7770001/7770002 的群主为 20001
+    class FakeQQAPI:
+        def __init__(self, ws):
+            pass
+
+        async def get_group_member_list(self, group_id):
+            return [
+                {"user_id": "20001", "role": "owner"},
+                {"user_id": "30001", "role": "member"},
+            ]
+
     old_perm = group_svc_mod.permission_service
+    old_api = group_svc_mod.QQAPI_list
     group_svc_mod.permission_service = svc
+    group_svc_mod.QQAPI_list = FakeQQAPI
     try:
         g = GroupService()
+        FAKE_WS = object()
 
         async def run(raw, uid=ADMIN):
-            return await g.authorize_group_simple({"raw_message": raw, "user_id": uid})
+            return await g.authorize_group_simple(FAKE_WS, {"raw_message": raw, "user_id": uid})
 
         # 基本：/sub_group <群号> <天数>，获权用户默认执行者
         judge, msg = asyncio.run(run("/sub_group 7770001 30"))
         check("简单版订阅成功", judge, msg)
         check("群在授权期内", svc.check_group_authorized("7770001"))
         check("获权用户默认为执行者(2级)", svc.check_user_permission("7770001", ADMIN, LEVEL_OWNER))
+        check("真实群主自动获得 2 级", svc.check_user_permission("7770001", "20001", LEVEL_OWNER))
 
-        # 显式获权用户
+        # 显式获权用户 = 群主本人：不重复授权，群主为 2 级
         judge, msg = asyncio.run(run("/sub_group 7770002 30 20001"))
         check("显式获权用户生效", judge and svc.check_user_permission("7770002", "20001", LEVEL_OWNER), msg)
 
@@ -194,8 +209,18 @@ def test_simple_subscribe_command():
         # 非管理员被拒
         judge, msg = asyncio.run(run("/sub_group 7770007 30", uid=OWNER))
         check("非管理员订阅被拒", not judge, msg)
+
+        # 群主查询失败（API 异常）不阻断主流程
+        class BoomAPI(FakeQQAPI):
+            async def get_group_member_list(self, group_id):
+                raise RuntimeError("api down")
+
+        group_svc_mod.QQAPI_list = BoomAPI
+        judge, msg = asyncio.run(run("/sub_group 7770008 30"))
+        check("群主查询失败不影响订阅", judge, msg)
     finally:
         group_svc_mod.permission_service = old_perm
+        group_svc_mod.QQAPI_list = old_api
 
 
 if __name__ == "__main__":

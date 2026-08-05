@@ -212,6 +212,32 @@ class QQAPI_list:
         except Exception as e:
             self.Logger.error(f"获取群列表失败: {e}")
             return []
+    async def get_group_member_list(self, group_id: str) -> list:
+        """
+        获取群成员列表（OneBot get_group_member_list）
+        成员 dict 含 role 字段: owner=群主, admin=管理员, member=成员
+        """
+        try:
+            json_message = {
+                "action": "get_group_member_list",
+                "params": {
+                    "group_id": str(group_id)
+                }
+            }
+            await self.websocket.send(json.dumps(json_message))
+
+            # 等待并处理响应
+            response = await self.websocket.recv()
+            data = json.loads(response)
+
+            if data.get("status") == "ok":
+                return data.get("data", [])
+
+            self.Logger.error(f"获取群成员列表失败: {data.get('message', '未知错误')}")
+            return []
+        except Exception as e:
+            self.Logger.error(f"获取群成员列表失败: {e}")
+            return []
     async def set_group_leave(self, group_id: str, is_dismiss: bool = True):
         """
         退出群聊

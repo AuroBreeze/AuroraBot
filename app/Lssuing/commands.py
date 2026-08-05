@@ -65,7 +65,8 @@ def _register():
         description="登记授权群组（简单版：now 起生效，功能 all）",
         usage="<目标群号> <天数> [获权用户，默认自己]",
         detail="简单版群授权：登记授权群组并写入授权时段（立即生效，功能 all）。\n"
-               "获权用户即该群 2 级（群主/付费用户），缺省为命令执行者。",
+               "获权用户即该群 2 级（群主/付费用户），缺省为命令执行者；\n"
+               "授权后自动识别该群真实群主并授予 2 级权限（与获权用户不同时）。",
         example="/sub_group 123456789 30\n"
                 "# 授权群 123456789 使用 30 天，获权用户=自己\n"
                 "/sub_group 123456789 30 88888888\n"
@@ -79,7 +80,8 @@ def _register():
         description="登记授权群组（完整版：可指定起止时间与功能）",
         usage="<目标群号>\nstarttime now\nendtime <天数>\nuser_id <获权用户>\nfeatures all",
         detail="完整版群授权：可指定起止时间与授权功能（多行参数格式）。\n"
-               "starttime 可为 now 或 %Y-%m-%d %H:%M:%S；endtime 为授权天数。",
+               "starttime 可为 now 或 %Y-%m-%d %H:%M:%S；endtime 为授权天数；\n"
+               "授权后自动识别该群真实群主并授予 2 级权限（与获权用户不同时）。",
         example="subscribe_group 123456789\n"
                 "starttime now\n"
                 "endtime 30\n"
