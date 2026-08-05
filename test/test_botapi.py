@@ -180,12 +180,22 @@ def test_api_wrappers():
 
 
 def test_send_at_group_message_space():
-    print("\n[1c] send_at_group_message：at 后含空格段")
+    print("\n[1c] send_at_group_message：at 后含空格段 + _call 通道")
     ws = MockWS()
     api = QQAPI_list(ws)
-    asyncio.run(api.send_at_group_message("g1", "u9", "请登记段位"))
-    payload = ws.sent[0]
-    segs = payload["params"]["message"]
+    ws.api = api  # 模拟接收层持有该实例（响应投递）
+
+    async def run():
+        task = asyncio.create_task(api.send_at_group_message("g1", "u9", "请登记段位"), name="at_space")
+        await asyncio.sleep(0.05)
+        payload = ws.sent[0]
+        segs = payload["params"]["message"]
+        ws.deliver(ws.ok({"message_id": 999}))  # 模拟 ws 层响应投递
+        mid = await task
+        return mid, segs
+
+    mid, segs = asyncio.run(run())
+    check("走 _call 返回 message_id", mid == 999, mid)
     check("消息含 at 段", segs[0] == {"type": "at", "data": {"qq": "u9"}}, str(segs))
     check("at 后有空格段", segs[1] == {"type": "text", "data": {"text": " "}}, str(segs))
     check("正文在后", segs[2]["data"]["text"] == "请登记段位", str(segs))
