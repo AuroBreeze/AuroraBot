@@ -1,0 +1,20 @@
+enabled: true
+observe_minutes: 10
+auto_approve: true
+auto_approve_scope: authorized
+welcome_msg: '欢迎 {user} 加入本群！
+
+  请阅读群规：
+
+  {rules}
+
+  {link}
+
+
+  {question}'
+rules_msg: 入群 {minutes} 分钟内未发言将被移出群聊，请尽快发言报到。
+link: ''
+tier_question: 请回复您的游戏段位（如：王者、钻石、铂金…），回复任意文字即可登记：
+tier_confirm: ✅ 已登记您的段位：{tier}
+tier_denied: ⚠️ 段位登记失败，请稍后重试。
+not_member: 该用户不是本群成员或暂无记录。
