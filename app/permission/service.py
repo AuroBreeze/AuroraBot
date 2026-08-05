@@ -48,7 +48,7 @@ class PermissionService:
                         start_time: str, end_time_days: int, features: str) -> tuple[bool, str]:
         """
         登记授权群并写入授权时间段。start_time 为 'now' 或 '%Y-%m-%d %H:%M:%S'。
-        end_time_days 为授权天数（>= 0）。
+        end_time_days 为授权天数（>= 0）；-1 表示无限期订阅（永不过期）。
         """
         if not self.store.is_admin(operator_id):
             return False, f"用户{operator_id}不是系统管理员，无权授权群组"
@@ -59,9 +59,13 @@ class PermissionService:
                 start_dt = datetime.now()
             else:
                 start_dt = datetime.strptime(start_time, TIME_FORMAT)
-            if end_time_days < 0:
-                return False, "授权天数不能为负数"
-            end_dt = start_dt + timedelta(days=end_time_days)
+            if end_time_days == -1:
+                # 无限期订阅：结束时间设为极大值，判定逻辑自然永不过期
+                end_dt = datetime(9999, 12, 31, 23, 59, 59)
+            elif end_time_days < -1:
+                return False, "授权天数不能为负数（-1 表示无限期订阅）"
+            else:
+                end_dt = start_dt + timedelta(days=end_time_days)
         except ValueError:
             return False, f"时间格式错误，应为 {TIME_FORMAT} 或 now"
 

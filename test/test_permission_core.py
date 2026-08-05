@@ -75,6 +75,13 @@ def test_subscribe_and_group_auth():
     store.add_group_authorization(GROUP_2, "888", "2020-01-01 00:00:00", "2020-01-02 00:00:00", "all")
     check("过期群授权检查为 false", not svc.check_group_authorized(GROUP_2))
 
+    # 无限期订阅：-1 成功且恒有效；其他负数拒绝
+    judge, msg = svc.subscribe_group(ADMIN, "7779999", "888", "now", -1, "all")
+    check("无限期订阅成功", judge, msg)
+    check("无限期群授权恒有效", svc.check_group_authorized("7779999"))
+    judge, msg = svc.subscribe_group(ADMIN, "7779998", "888", "now", -2, "all")
+    check("其他负数仍拒绝", not judge, msg)
+
 
 def test_raise_privilege_guard():
     print("\n[3] 提权防护（防覆盖降级/防同级篡改）")
@@ -206,8 +213,10 @@ def test_simple_subscribe_command():
         check("天数非整数被拒", not judge and "整数" in msg, msg)
         judge, msg = asyncio.run(run("/sub_group 7770005"))
         check("缺少参数被拒", not judge and "格式" in msg, msg)
-        judge, msg = asyncio.run(run("/sub_group 7770006 -1"))
-        check("负数天数被拒", not judge and "负数" in msg, msg)
+        judge, msg = asyncio.run(run("/sub_group 7770006 -2"))
+        check("小于 -1 的天数被拒", not judge and "无限期" in msg, msg)
+        judge, msg = asyncio.run(run("/sub_group 7770009 -1"))
+        check("-1 无限期订阅成功", judge and svc.check_group_authorized("7770009"), msg)
 
         # 非管理员被拒
         judge, msg = asyncio.run(run("/sub_group 7770007 30", uid=OWNER))

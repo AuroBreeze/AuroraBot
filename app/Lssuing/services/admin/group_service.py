@@ -97,8 +97,8 @@ class GroupService:
             days = int(parts[2])
         except ValueError:
             return False, "天数必须是整数"
-        if days < 0:
-            return False, "天数不能为负数"
+        if days < -1:
+            return False, "天数不能小于 -1（-1 表示无限期订阅）"
         owner_id = parts[3] if len(parts) > 3 else str(message.get("user_id"))
         operator_id = str(message.get("user_id"))
 
