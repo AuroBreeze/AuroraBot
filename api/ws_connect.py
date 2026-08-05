@@ -39,6 +39,8 @@ class Websocket_receiver:
 
                 # 统一 API 客户端：响应通过 echo 匹配回流（由 _route_message 投递）
                 self.api = QQAPI_list(websocket)
+                from app.core.runtime import set_api
+                set_api(self.api)  # 注入运行时上下文（事件订阅者使用）
 
                 # MESSAGE 事件订阅者（闭包捕获当前连接）；重连时先退订旧的
                 if self._msg_handler is not None:
@@ -69,6 +71,9 @@ class Websocket_receiver:
             self.logger.error("Websocket Receiver Error: %s" % e)
         except:
             self.logger.error("Websocket Receiver Error: %s" % "Unknown Error or closed()")
+        finally:
+            from app.core.runtime import set_api
+            set_api(None)  # 断开连接，清空运行时上下文
 
     async def start_receiver(self):
         await self.msg_raw_receiver()
