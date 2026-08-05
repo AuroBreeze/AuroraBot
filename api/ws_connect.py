@@ -18,10 +18,7 @@ class Websocket_receiver:
         try:
             async with websockets.connect(self.url) as websocket:
                 self.logger.info("Websocket Connected: %s" % "QQbot_server_started")
-                
-                # 启动后台任务（包括定时喊话检查）
-                await self.dispatcher.start_background_tasks(websocket)
-                
+
                 async for message in websocket:
                     self.logger.info("Message Received: %s" % message)
                     await Raw_data.put(message)
