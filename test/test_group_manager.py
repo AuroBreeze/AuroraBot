@@ -844,12 +844,20 @@ def test_observe_ask_owner_and_nickname():
     asyncio.run(svc.sync_group_members_active("g1"))
     check("API 同步保存昵称", store.get_member("g1", "1001")["nickname"] == "小明")
 
+    # 昵称变化：API 同步应更新（不再被旧值挡住）
+    api.member_infos["1001"]["nickname"] = "小明改名字了"
+    asyncio.run(svc.sync_group_members_active("g1"))
+    check("API 同步更新已变昵称", store.get_member("g1", "1001")["nickname"] == "小明改名字了")
+
     # 昵称存储：消息事件保存（record_active 透传）
     svc.record_active("g1", "u1", "小红")
     check("消息事件保存昵称", store.get_member("g1", "u1")["nickname"] == "小红")
     # 无昵称不覆盖已有
     svc.record_active("g1", "u1", None)
     check("无昵称不覆盖", store.get_member("g1", "u1")["nickname"] == "小红")
+    # 昵称变化：消息事件也更新
+    svc.record_active("g1", "u1", "小红改名")
+    check("消息事件更新已变昵称", store.get_member("g1", "u1")["nickname"] == "小红改名")
 
 
 def test_gm_config_command():

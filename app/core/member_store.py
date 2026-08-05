@@ -96,7 +96,8 @@ class MemberStore:
                       last_active: Optional[str] = None, nickname: Optional[str] = None) -> None:
         """
         API 活跃同步专用：新成员补记录，已有成员仅更新传入字段（不覆盖既有值/extras）。
-        join_time/last_active/nickname 为 None 时不覆盖已有值；新成员的 join_time 缺省用当前时间。
+        join_time/last_active 为 None 时不覆盖已有值；nickname 有值时总是更新（API 为权威来源）。
+        新成员的 join_time 缺省用当前时间。
         """
         conn = self._get_connection()
         conn.execute(
@@ -105,7 +106,8 @@ class MemberStore:
             "ON CONFLICT(group_id, user_id) DO UPDATE SET "
             "  join_time = COALESCE(excluded.join_time, group_members.join_time), "
             "  last_active = COALESCE(excluded.last_active, group_members.last_active), "
-            "  nickname = COALESCE(excluded.nickname, group_members.nickname)",
+            "  nickname = CASE WHEN excluded.nickname IS NOT NULL AND excluded.nickname != '' "
+            "                 THEN excluded.nickname ELSE group_members.nickname END",
             (str(group_id), str(user_id), join_time or self._now_str(), last_active, nickname),
         )
         conn.commit()
@@ -133,14 +135,20 @@ class MemberStore:
         """更新最后发言时间（仅更新已记录成员；未记录成员忽略）。
 
         秒级去重：同一用户同一秒重复发言不重复写库/commit（减少高频写放大）；
-        顺带保存发言者昵称（COALESCE，不覆盖已有昵称）。
+        顺带保存发言者昵称（有值即更新，实时昵称为准）。
         """
         now = self._now_str()
         conn = self._get_connection()
+        # 触发更新条件：last_active 变化（正常发言）或 昵称有值且与库中不同（同秒发言也能更新昵称）
         cur = conn.execute(
-            "UPDATE group_members SET last_active = ?, nickname = COALESCE(?, nickname) "
-            "WHERE group_id = ? AND user_id = ? AND (last_active IS NULL OR last_active != ?)",
-            (now, nickname, str(group_id), str(user_id), now),
+            "UPDATE group_members SET last_active = ?, "
+            "  nickname = CASE WHEN ? IS NOT NULL AND ? != '' THEN ? ELSE nickname END "
+            "WHERE group_id = ? AND user_id = ? "
+            "  AND (last_active IS NULL OR last_active != ? "
+            "       OR (? IS NOT NULL AND ? != '' AND (nickname IS NULL OR nickname != ?)))",
+            (now, nickname, nickname, nickname,
+             str(group_id), str(user_id),
+             now, nickname, nickname, nickname),
         )
         if cur.rowcount:  # 实际有变化才 commit
             conn.commit()
