@@ -2,8 +2,8 @@ import json
 import asyncio
 from app.Lssuing.mandated import Mandated
 # from app.Learn_clock.clock_main import Clock_learn
-from app.Commodity_lssuing.manage import Manage
-from app.Proxy_talk.proxy_main import Proxy_talk
+# from app.Commodity_lssuing.manage import Manage
+# from app.Proxy_talk.proxy_main import Proxy_talk
 from app.Timed_announcement.announcement_main import TimedAnnouncement, AnnouncementChecker
 
 
@@ -82,7 +82,8 @@ class Msg_dispatcher:
     #     try:
     #         if isinstance(message, str):
     #             message = json.loads(message)
-    #             await Manage(websocket, message).handle_event()
+    #         from app.Commodity_lssuing.manage import Manage  # 延迟导入（依赖 matplotlib/pandas/numpy extra）
+    #         await Manage(websocket, message).handle_event()
     #     except Exception as e:
     #         import traceback
     #         traceback.print_exc()
@@ -91,7 +92,8 @@ class Msg_dispatcher:
     #     try:
     #         if isinstance(message, str):
     #             message = json.loads(message)
-    #             await Proxy_talk(websocket, message).handle_event()
+    #         from app.Proxy_talk.proxy_main import Proxy_talk  # 延迟导入（依赖 requests extra）
+    #         await Proxy_talk(websocket, message).handle_event()
     #     except Exception as e:
     #         import traceback
     #         traceback.print_exc()
