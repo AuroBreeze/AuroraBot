@@ -87,6 +87,23 @@ class MemberStore:
         conn.commit()
         return cursor.rowcount > 0
 
+    def upsert_member(self, group_id, user_id, join_time: Optional[str] = None,
+                      last_active: Optional[str] = None) -> None:
+        """
+        API 活跃同步专用：新成员补记录，已有成员仅更新传入字段（不覆盖既有值/extras）。
+        join_time/last_active 为 None 时不覆盖已有值；新成员的 join_time 缺省用当前时间。
+        """
+        conn = self._get_connection()
+        conn.execute(
+            "INSERT INTO group_members (group_id, user_id, join_time, last_active, extras) "
+            "VALUES (?, ?, ?, ?, '{}') "
+            "ON CONFLICT(group_id, user_id) DO UPDATE SET "
+            "  join_time = COALESCE(excluded.join_time, group_members.join_time), "
+            "  last_active = COALESCE(excluded.last_active, group_members.last_active)",
+            (str(group_id), str(user_id), join_time or self._now_str(), last_active),
+        )
+        conn.commit()
+
     # ---------- 批量补记录标记 ----------
 
     def mark_backfilled(self, group_id) -> None:

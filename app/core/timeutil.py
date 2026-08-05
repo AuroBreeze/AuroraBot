@@ -34,3 +34,13 @@ def parse_local(s: str) -> datetime | None:
         return datetime.strptime(s, TIME_FORMAT).replace(tzinfo=_bj_tz)
     except ValueError:
         return None
+
+
+def from_ts(ts) -> datetime | None:
+    """Unix 时间戳（秒）→ 北京时间 datetime；缺失/无效返回 None"""
+    if not ts:
+        return None
+    try:
+        return datetime.fromtimestamp(int(ts), _bj_tz)
+    except (ValueError, OSError, OverflowError):
+        return None

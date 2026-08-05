@@ -19,6 +19,8 @@ CONFIG_KEYS = {
     "auto_approve_scope":     {"type": str,  "desc": "自动同意范围：authorized=仅授权群 / all=全部群"},
     "auto_backfill":          {"type": bool, "desc": "自动补记录：未处理过的群自动补一次成员记录"},
     "auto_backfill_interval": {"type": int,  "desc": "自动补记录检查间隔（秒）"},
+    "active_sync_enabled":    {"type": bool, "desc": "API 活跃同步开关（get_group_member_info 遍历授权群成员）"},
+    "active_sync_interval":   {"type": int,  "desc": "API 活跃同步间隔（秒）"},
     "inactive_kick_enabled":  {"type": bool, "desc": "不活跃自动踢人开关"},
     "inactive_kick_days":     {"type": int,  "desc": "不活跃阈值（天）"},
     "inactive_remind_days":   {"type": int,  "desc": "踢前提醒（剩余天数）"},
@@ -42,6 +44,8 @@ DEFAULTS = {
     "auto_approve_scope": "authorized",  # authorized=仅已授权群; all=全部
     "auto_backfill": True,          # 自动补记录：未处理过的群自动补一次
     "auto_backfill_interval": 300,  # 自动补记录检查间隔（秒）
+    "active_sync_enabled": True,    # API 活跃同步开关（get_group_member_info 遍历授权群成员）
+    "active_sync_interval": 3600,   # API 活跃同步间隔（秒）
     "inactive_kick_enabled": False, # 不活跃自动踢人开关（默认关闭，需手动开启）
     "inactive_kick_days": 7,        # 不活跃阈值（天）
     "inactive_remind_days": 1,      # 踢前提醒（剩余天数）

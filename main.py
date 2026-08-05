@@ -27,6 +27,10 @@ async def main():
         from app.group_manager.service import group_manager_service
         await group_manager_service.scan_inactive_members()
 
+    async def _sync_active_latest():
+        from app.group_manager.service import group_manager_service
+        await group_manager_service.sync_all_groups_active()
+
     task_scheduler.periodic(
         "gm_auto_backfill",
         gm_config.get_int("auto_backfill_interval", 300),
@@ -36,6 +40,11 @@ async def main():
         "gm_inactive_kick",
         gm_config.get_int("inactive_kick_interval", 3600),
         _scan_inactive_latest,
+    )
+    task_scheduler.periodic(
+        "gm_sync_active",
+        gm_config.get_int("active_sync_interval", 3600),
+        _sync_active_latest,
     )
 
     ws_receiver = Websocket_receiver()

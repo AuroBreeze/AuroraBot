@@ -644,6 +644,78 @@ def test_inactive_list_and_kick():
     check("序号不存在按QQ号处理", "不在群成员" in t, t)
 
 
+def test_api_active_sync():
+    print("\n[16] API 活跃同步（get_group_member_info → sqlite）")
+    from datetime import datetime, timedelta
+    from app.core import timeutil
+    from app.core.runtime import set_api, set_self_id
+
+    svc, store = make_svc()
+    api = FakeAPI()
+    set_api(api)
+    set_self_id("9001")
+    now_ts = int(timeutil.bj_now().timestamp())
+    api.member_roles = {"1001": "member", "1002": "member", "9001": "owner"}
+    # 成员 1001：3 天前最后发言；1002：无 last_sent_time（0）
+    api.member_infos = {
+        "1001": {"user_id": "1001", "last_sent_time": now_ts - 3 * 86400, "join_time": now_ts - 30 * 86400},
+        "1002": {"user_id": "1002", "last_sent_time": 0, "join_time": now_ts - 5 * 86400},
+    }
+
+    async def run():
+        return await svc.sync_group_members_active("g1")
+
+    updated, total = asyncio.run(run())
+    check("成员计数", total == 2, total)
+    check("更新数", updated == 2, updated)
+
+    m1 = store.get_member("g1", "1001")
+    check("新成员已补记录(join_time)", m1 is not None and m1["join_time"] is not None, m1)
+    last = timeutil.parse_local(m1["last_active"])
+    check("last_active 已按 API 更新(约3天)", last is not None and (timeutil.bj_now() - last).days == 3, m1["last_active"])
+    # last_sent_time=0 → last_active 不写入（保持 NULL）
+    m2 = store.get_member("g1", "1002")
+    check("last_sent_time=0 不写入活跃", m2["last_active"] is None, m2["last_active"])
+
+    # 已有成员：upsert 不覆盖旧 last_active（传 None 时保留）
+    store.record_join("g1", "1003")
+    store.record_message("g1", "1003")
+    before = store.get_member("g1", "1003")["last_active"]
+    api.member_roles["1003"] = "member"
+    api.member_infos["1003"] = {"user_id": "1003", "last_sent_time": 0}
+    asyncio.run(run())
+    check("upsert None 不覆盖既有活跃", store.get_member("g1", "1003")["last_active"] == before)
+
+    # 无效时间戳容错：不会崩
+    api.member_infos["1001"]["last_sent_time"] = "99999999999999999999"
+    updated, total = asyncio.run(run())
+    check("无效时间戳容错", total == 3, (updated, total))
+
+    # 同步全部授权群
+    gm_config._config["active_sync_enabled"] = True
+    svc._permission_ok = None
+    import app.core.permission as perm_mod
+    old = perm_mod.permission_service
+    class P:
+        def check_group_authorized(self, g): return g in ("g1",)
+    perm_mod.permission_service = P()
+    try:
+        from app.core import runtime as rt
+        rt.set_api(api)
+        api.get_group_list_calls = []
+        class FakeAPI2(FakeAPI):
+            async def get_group_list(self, no_cache=False):
+                return ["g1"]
+        api2 = FakeAPI2()
+        api2.member_roles = dict(api.member_roles)
+        api2.member_infos = dict(api.member_infos)
+        rt.set_api(api2)
+        asyncio.run(svc.sync_all_groups_active())
+        check("全群同步执行无异常", True)
+    finally:
+        perm_mod.permission_service = old
+
+
 def test_gm_config_command():
     print("\n[14] 群管配置命令（/gm_config：查看/修改/持久化）")
     from app.group_manager.commands import _gm_config_handler
@@ -701,6 +773,7 @@ if __name__ == "__main__":
     test_never_kick_self()
     test_inactive_kick()
     test_inactive_list_and_kick()
+    test_api_active_sync()
     test_gm_config_command()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)

@@ -261,6 +261,55 @@ class GroupManagerService:
             added, total = await self.backfill_group(group_id)
             self.logger.info(f"自动补记录 群:{group_id} 新增:{added}/{total}")
 
+    # ---------- API 活跃同步（get_group_member_info → sqlite） ----------
+
+    async def sync_group_members_active(self, group_id: str) -> tuple[int, int]:
+        """
+        遍历群全部成员，逐个调 get_group_member_info：
+        用 last_sent_time / join_time（Unix 秒）更新 sqlite 活跃与入群时间。
+        返回 (更新成功数, 成员总数)。单成员查询失败不影响整体。
+        """
+        api = get_api()
+        if api is None:
+            return 0, 0
+        try:
+            members = await api.get_group_member_list(group_id)
+        except Exception:
+            return 0, 0
+        updated, total = 0, 0
+        for m in members:
+            uid = str(m.get("user_id") or "")
+            if not uid or uid == get_self_id():
+                continue
+            total += 1
+            try:
+                info = await api.get_group_member_info(group_id, uid)
+            except Exception:
+                continue  # 单成员查询失败不阻断
+            last_dt = timeutil.from_ts(info.get("last_sent_time"))
+            join_dt = timeutil.from_ts(info.get("join_time"))
+            self.store.upsert_member(
+                group_id, uid,
+                timeutil.format_local(join_dt) if join_dt else None,
+                timeutil.format_local(last_dt) if last_dt else None,
+            )
+            updated += 1
+        return updated, total
+
+    async def sync_all_groups_active(self) -> None:
+        """周期任务：遍历全部已授权群同步成员活跃（开关 active_sync_enabled）"""
+        if not gm_config.get_bool("active_sync_enabled", True):
+            return
+        api = get_api()
+        if api is None:
+            return
+        from app.core.permission import permission_service
+        for group_id in await api.get_group_list():
+            if not permission_service.check_group_authorized(group_id):
+                continue
+            updated, total = await self.sync_group_members_active(group_id)
+            self.logger.info(f"活跃同步 群:{group_id} 更新:{updated}/{total}")
+
     # ---------- 批量成员信息 ----------
 
     @staticmethod
