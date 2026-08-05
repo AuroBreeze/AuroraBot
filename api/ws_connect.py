@@ -81,10 +81,10 @@ class Websocket_receiver:
 
         except websockets.exceptions.ConnectionClosedError as e:
             self.logger.error("Websocket Connection Closed Error: %s" % e)
+        except asyncio.CancelledError:
+            raise  # Ctrl+C / 任务取消：必须向上传播，否则重连循环无法退出
         except Exception as e:
             self.logger.error("Websocket Receiver Error: %s" % e)
-        except:
-            self.logger.error("Websocket Receiver Error: %s" % "Unknown Error or closed()")
         finally:
             from app.core.runtime import set_api
             # 断开清理：退订 MESSAGE 订阅，防止后续事件投递给已死连接
