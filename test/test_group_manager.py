@@ -399,6 +399,60 @@ def test_auto_backfill_pending():
     check("手动 backfill 后标记", store2.is_backfilled("gX"))
 
 
+def test_members_list():
+    print("\n[10] 批量成员信息 /members（加入/活跃/段位/段位时间 + 分页）")
+    svc, store = make_svc()
+
+    # 造 25 个成员
+    for i in range(1, 26):
+        store.record_join("g1", f"u{i:02d}", join_time=f"2026-01-{(i % 28) + 1:02d} 08:00:00")
+        if i % 2 == 0:
+            store.record_message("g1", f"u{i:02d}")
+    store.set_extras("g1", "u02", {"tier": "王者", "tier_time": "2026-02-01 09:30:00"})
+    store.set_extras("g1", "u01", {"tier": "钻石"})  # 有段位无登记时间
+
+    text = svc.list_members("g1", 1)
+    check("列表含标题与分页", "第 1/2 页" in text and "本群 25 人" in text, text[:60])
+    check("含加入/活跃/段位/登记字段", "加入:" in text and "活跃:" in text and "段位:" in text and "登记:" in text)
+    check("段位与登记时间显示", "段位:王者 登记:02-01 09:30" in text, text)
+    check("段位无登记时间显示 -", "段位:钻石 登记:-" in text, text)
+    check("未登记段位显示 -", "段位:-" in text)
+    check("分页提示", "/members 2 查看下一页" in text)
+
+    text2 = svc.list_members("g1", 2)
+    check("第二页", "第 2/2 页" in text2 and "u24" in text2 and "u25" in text2, text2[:100])
+
+    text3 = svc.list_members("g1", 3)
+    check("越界提示", "页码越界" in text3, text3)
+
+    # 无记录群
+    text4 = svc.list_members("gEmpty")
+    check("无记录提示补记录", "暂无成员记录" in text4 and "/backfill" in text4, text4)
+
+    # 段位登记时间已记录（handle_tier_reply）
+    api = FakeAPI()
+    runtime.set_api(api)
+    store.record_join("g1", "uNew")
+    store.set_extras("g1", "uNew", {"flow": "awaiting_tier", "welcome_msg_id": "msg-123"})
+    ev = type("E", (), {"group_id": "g1", "user_id": "uNew",
+                        "raw_message": "铂金", "data": {"message": [{"type": "reply", "data": {"id": "msg-123"}}]}})()
+    asyncio.run(svc.handle_tier_reply(ev))
+    extras = store.get_extras("g1", "uNew")
+    check("段位登记时间已记录", extras.get("tier") == "铂金" and extras.get("tier_time"), str(extras))
+    check("登记时间格式正确", len(str(extras.get("tier_time"))) == 19, str(extras.get("tier_time")))
+
+    # 命令 handler
+    from app.group_manager.commands import _members_handler
+    from app.group_manager.service import group_manager_service
+    old_store = group_manager_service.store
+    group_manager_service.store = store
+    try:
+        judge, reply = asyncio.run(_members_handler(None, {"raw_message": "/members", "group_id": "g1", "user_id": "u"}))
+        check("/members 命令输出", judge and "群成员档案" in reply, reply[:60])
+    finally:
+        group_manager_service.store = old_store
+
+
 if __name__ == "__main__":
     test_config_defaults()
     test_member_join_flow()
@@ -409,5 +463,6 @@ if __name__ == "__main__":
     test_event_bus_integration()
     test_backfill()
     test_auto_backfill_pending()
+    test_members_list()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)

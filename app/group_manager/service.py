@@ -8,8 +8,12 @@
 - 自动同意入群：GROUP_REQUEST 事件按策略同意（set_group_add_request）
 """
 import re
+from datetime import datetime
+
+import pytz
 
 from api.Logger_owner import Logger
+from config.env import TIMEZONE
 from app.core import member_store
 from app.core.tasks import task_scheduler
 from app.core.runtime import get_api
@@ -22,6 +26,10 @@ class GroupManagerService:
     def __init__(self):
         self.logger = Logger("group_manager")
         self.store = member_store.member_store
+        self.bj_tz = pytz.timezone(TIMEZONE)
+
+    def _now_str(self) -> str:
+        return datetime.now(self.bj_tz).strftime("%Y-%m-%d %H:%M:%S")
 
     # ---------- 入群引导 ----------
 
@@ -121,6 +129,7 @@ class GroupManagerService:
             return
 
         extras["tier"] = clean
+        extras["tier_time"] = self._now_str()  # 记录段位登记时间
         extras["flow"] = ""  # 流程完成
         self.store.set_extras(group_id, user_id, extras)
         confirm = gm_config.get()["tier_confirm"].format(tier=clean)
@@ -243,6 +252,50 @@ class GroupManagerService:
                 continue
             added, total = await self.backfill_group(group_id)
             self.logger.info(f"自动补记录 群:{group_id} 新增:{added}/{total}")
+
+    # ---------- 批量成员信息 ----------
+
+    @staticmethod
+    def _fmt_time(ts) -> str:
+        """时间缩写 MM-DD HH:MM；空值 → '-'"""
+        if not ts:
+            return "-"
+        try:
+            return ts[5:16]  # "2026-01-05 08:00:00" -> "01-05 08:00"
+        except (IndexError, TypeError):
+            return str(ts)
+
+    def list_members(self, group_id, page: int = 1, page_size: int = 20) -> str:
+        """
+        批量显示群成员信息：加入时间 / 最后活跃 / 游戏段位 / 段位登记时间。
+        分页输出；无记录时提示先补记录。
+        """
+        members = self.store.get_members(group_id)
+        if not members:
+            return "本群暂无成员记录（可先执行 /backfill 补记录）"
+
+        total = len(members)
+        total_pages = max(1, -(-total // page_size))
+        if page < 1 or page > total_pages:
+            return f"页码越界：共 {total_pages} 页（/members 1-{total_pages}）"
+
+        start = (page - 1) * page_size
+        rows = members[start:start + page_size]
+        lines = [f"📋 群成员档案（本群 {total} 人，第 {page}/{total_pages} 页）"]
+        for i, m in enumerate(rows, start=start + 1):
+            extras = m["extras"]
+            tier = extras.get("tier") or "-"
+            tier_time = self._fmt_time(extras.get("tier_time"))
+            lines.append(
+                f"{i}. {m['user_id']} "
+                f"加入:{self._fmt_time(m['join_time'])} "
+                f"活跃:{self._fmt_time(m['last_active'])} "
+                f"段位:{tier} 登记:{tier_time}"
+            )
+        if total_pages > 1:
+            nxt = page + 1 if page < total_pages else 1
+            lines.append(f"💡 /members {nxt} 查看下一页")
+        return "\n".join(lines)
 
     # ---------- 工具 ----------
 

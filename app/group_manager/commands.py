@@ -43,7 +43,28 @@ async def _backfill_handler(websocket, message) -> tuple[bool, str]:
     return True, await group_manager_service.backfill_all()
 
 
+async def _members_handler(websocket, message) -> tuple[bool, str]:
+    """/members [页码]：批量显示本群成员信息（加入/活跃/段位/段位时间）"""
+    group_id = str(message.get("group_id", ""))
+    parts = str(message.get("raw_message", "")).split()
+    page = 1
+    if len(parts) > 1 and parts[1].isdigit():
+        page = int(parts[1])
+    return True, group_manager_service.list_members(group_id, page)
+
+
 def _register():
+    registry.register(Command(
+        name="/members",
+        aliases=["members"],
+        handler=_members_handler,
+        description="批量显示本群成员信息（加入/活跃/段位/段位时间）",
+        usage="[页码，默认 1]",
+        detail="分页（每页 20 人）显示群成员档案：加入时间、最后活跃、\n"
+               "游戏段位、段位登记时间。段位未登记/时间缺失显示 -。",
+        example="/members\n/members 2",
+        required_level=LEVEL_ADMIN, app_name=APP,
+    ))
     registry.register(Command(
         name="/backfill",
         aliases=["backfill"],
