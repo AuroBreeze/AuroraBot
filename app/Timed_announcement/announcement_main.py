@@ -32,23 +32,10 @@ class TimedAnnouncement:
             
         user_id = str(self.message.get("user_id"))
         group_id = str(self.message.get("group_id"))
-        
-        # 解析命令
+
+        # 权限检查与帮助菜单由命令注册中心统一处理；这里只分发喊话命令
         if msg.startswith("定时喊话"):
-            # 检查用户权限（需要3级权限）
-            if not permission_service.check_user_permission(group_id, user_id, 3):
-                await self.send_message("⚠️ 您没有权限使用定时喊话功能")
-                return
             await self.handle_announcement_command(msg, user_id, group_id)
-        elif msg == "喊话帮助" or msg == "喊话菜单":
-            # 检查用户权限（需要3级权限）
-            if not permission_service.check_user_permission(group_id, user_id, 3):
-                await self.send_message("⚠️ 您没有权限使用定时喊话功能")
-                return
-            await self.show_help()
-        else:
-            # 不是定时喊话命令，不处理
-            pass
             
     async def handle_announcement_command(self, msg: str, user_id: str, group_id: str):
         """
