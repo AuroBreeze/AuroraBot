@@ -613,6 +613,10 @@ def test_inactive_list_and_kick():
     # 分页：再入 12 人 → 共 16 人 → 2 页
     for i in range(12):
         store.record_join("g1", f"70{i:02d}", fmt(now - timedelta(days=10)))
+    # 未指定页码 → 全部列出
+    text_all = svc.list_inactive_members("g1", 7)
+    check("默认全部列出：标题无页码", "第" not in text_all.splitlines()[0] and "共 15 人" in text_all.splitlines()[0], text_all.splitlines()[0])
+    check("默认全部列出：含全部成员", "1." in text_all and "15." in text_all, text_all)
     text_p1 = svc.list_inactive_members("g1", 7, 1)
     check("分页标题 第1/2页", "第 1/2 页" in text_p1, text_p1)
     text_p2 = svc.list_inactive_members("g1", 7, 2)

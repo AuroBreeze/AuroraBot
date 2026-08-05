@@ -389,8 +389,8 @@ class GroupManagerService:
             return None
         return (now - last_dt).days
 
-    def list_inactive_members(self, group_id: str, days: int, page: int = 1, page_size: int = 10) -> str:
-        """列出本群不活跃成员：序号 + @ + 未活跃天数，按天数降序，分页；缓存完整列表供 /kick 用"""
+    def list_inactive_members(self, group_id: str, days: int, page: int = 0, page_size: int = 10) -> str:
+        """列出本群不活跃成员：序号 + @ + 未活跃天数，按天数降序；page<=0 全部列出，>0 分页；缓存完整列表供 /kick 用"""
         days = max(1, days)
         now = datetime.now(self.bj_tz)
         rows = []
@@ -407,12 +407,20 @@ class GroupManagerService:
         self._last_inactive[group_id] = [uid for uid, _ in rows]
 
         total = len(rows)
-        pages = max(1, -(-total // page_size))
-        page = max(1, min(page, pages))
-        lines = [f"📋 本群不活跃成员（≥{days} 天，共 {total} 人，第 {page}/{pages} 页）"]
-        for idx, (uid, inactive) in enumerate(
-            rows[(page - 1) * page_size: page * page_size], (page - 1) * page_size + 1
-        ):
+        if page and page > 0:
+            # 显式页码 → 分页
+            pages = max(1, -(-total // page_size))
+            page = max(1, min(page, pages))
+            shown = rows[(page - 1) * page_size: page * page_size]
+            head = f"📋 本群不活跃成员（≥{days} 天，共 {total} 人，第 {page}/{pages} 页）"
+            start_idx = (page - 1) * page_size + 1
+        else:
+            # 未指定页码 → 全部列出
+            shown = rows
+            head = f"📋 本群不活跃成员（≥{days} 天，共 {total} 人）"
+            start_idx = 1
+        lines = [head]
+        for idx, (uid, inactive) in enumerate(shown, start_idx):
             lines.append(f"{idx}. [CQ:at,qq={uid}]  未活跃 {inactive} 天")
         if total:
             lines.append("💡 /kick 批量移出：/kick 1 3 @用户 QQ号（数字=本列表序号）")

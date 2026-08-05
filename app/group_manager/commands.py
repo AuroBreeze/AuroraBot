@@ -66,11 +66,11 @@ async def _gm_config_handler(websocket, message) -> tuple[bool, str]:
 
 
 async def _inactive_handler(websocket, message) -> tuple[bool, str]:
-    """/inactive [天数] [页码]：列出本群不活跃成员（@ + 未活跃天数，降序，分页）"""
+    """/inactive [天数] [页码]：列出本群不活跃成员（@ + 未活跃天数，降序；默认全部列出，显式页码才分页）"""
     group_id = str(message.get("group_id", ""))
     parts = str(message.get("raw_message", "")).split()
     days = gm_config.get_int("inactive_kick_days", 7)
-    page = 1
+    page = 0  # 0 = 全部列出
     if len(parts) > 1 and parts[1].isdigit():
         days = int(parts[1])
     if len(parts) > 2 and parts[2].isdigit():
@@ -146,10 +146,10 @@ def _register():
         name="/inactive",
         aliases=["inactive", "不活跃"],
         handler=_inactive_handler,
-        description="列出本群不活跃成员（@+未活跃天数，降序，分页）",
-        usage="[天数，默认配置阈值] [页码，默认 1]",
+        description="列出本群不活跃成员（@+未活跃天数，降序）",
+        usage="[天数，默认读配置 inactive_kick_days] [页码，默认全部列出]",
         detail="列出本群未活跃成员：每行序号 + @ + 未活跃天数，按天数降序。\n"
-               "默认阈值为 inactive_kick_days；每页 10 人。\n"
+               "默认全部列出（不指定页码）；指定页码才分页（每页 10 人）。\n"
                "列表序号可直接用于 /kick 批量移出。",
         example="/inactive\n/inactive 3\n/inactive 7 2",
         required_level=LEVEL_ADMIN, app_name=APP,
