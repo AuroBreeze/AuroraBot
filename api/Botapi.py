@@ -283,14 +283,14 @@ class QQAPI_list:
         发送群消息数组（图片/文本等，原样透传 message 数组）
         :param group_id: 群号
         :param message_array: 消息数组（OneBot message 段列表）
-        :return: 是否成功
+        :return: message_id；失败返回 None
         """
-        ok, _, msg = await self._call(
+        ok, data, msg = await self._call(
             "send_group_msg",
             {"group_id": str(group_id), "message": message_array},
         )
         if ok:
             self.Logger.info(f"已发送群消息数组,群号:{group_id},消息长度:{len(message_array)}")
-        else:
-            self.Logger.error(f"发送群消息数组失败: {msg}")
-        return ok
+            return (data or {}).get("message_id")
+        self.Logger.error(f"发送群消息数组失败: {msg}")
+        return None

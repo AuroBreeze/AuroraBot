@@ -130,20 +130,25 @@ class GroupManagerService:
             self.logger.warning(f"观察期成员 {user_id} 未发言但找不到群主/管理员/被授权用户，跳过（不踢）")
             return
         minutes = gm_config.get_int("observe_minutes", 10)
-        # 一条消息 @ 全部群管
+        # 一条消息 @ 全部群管（记录 message_id 供群管回复匹配）
         at_segs = [{"type": "at", "data": {"qq": m}} for m in managers]
         at_segs.append({"type": "text", "data": {
             "text": f" ⚠️ 成员 {user_id} 入群 {minutes} 分钟未发言，是否移出？\n"
-                    f"同意：回复 1（或：同意移出 {user_id}）\n拒绝：回复 0（或：拒绝移出 {user_id}）",
+                    f"同意：回复此消息 1\n拒绝：回复此消息 0",
         }})
-        await api.send_group_message_array(group_id, at_segs)
+        msg_id = await api.send_group_message_array(group_id, at_segs)
         extras["observe_pending"] = "asking"
         extras["observe_asked_date"] = today
+        extras["observe_ask_msg_id"] = str(msg_id) if msg_id is not None else ""
         self.store.set_extras(group_id, user_id, extras)
         self.logger.info(f"观察期询问群管 群:{group_id} 成员:{user_id} 群管:{managers}")
 
     async def handle_observe_reply(self, event) -> None:
-        """群管回复观察期询问：同意移出 / 拒绝移出（仅群主/管理员/被授权用户生效）"""
+        """群管回复观察期询问：回复该询问消息并输入 1（同意）/ 0（拒绝），精确处理对应成员。
+
+        仅群主/管理员/被授权用户生效；不回复询问消息（无 reply id）时忽略，
+        避免误把日常数字消息当成确认。
+        """
         data = event.data
         group_id = str(event.group_id or "")
         if not group_id:
@@ -156,37 +161,33 @@ class GroupManagerService:
         if sender_role not in ("owner", "admin") and not permission_service.check_user_permission(group_id, sender_uid, 2):
             return  # 仅群主/管理员/被授权用户可确认
         raw = str(data.get("raw_message") or "").strip()
-        agree = "同意移出" in raw
-        reject = "拒绝移出" in raw
-        if not agree and not reject:
-            # 快捷回复：1=同意 / 0=拒绝（可带目标 QQ，如 "1 123456"；无 pending 时无副作用）
-            parts = raw.split()
-            if len(parts) in (1, 2) and parts[0] in ("1", "0") and all(p.isdigit() for p in parts):
-                agree = parts[0] == "1"
-                reject = not agree
-        if not agree and not reject:
-            return
-        # 本群待确认成员（observe_pending == asking）
-        pending = [m["user_id"] for m in self.store.get_members(group_id)
-                   if self.store.get_extras(group_id, m["user_id"]).get("observe_pending") == "asking"]
-        if not pending:
-            return
-        # 消息中指定的 QQ 号（限 pending 内）；未指定则全部
-        nums = re.findall(r"\d{5,}", raw)
-        targets = [n for n in nums if n in pending] or pending
+        # 提取消息纯文本（message 数组 text 段优先，兜底剔除 CQ 码后的 raw_message）
+        segs = data.get("message") or []
+        content = "".join((s.get("data") or {}).get("text", "") for s in segs if s.get("type") == "text")
+        if not content:
+            content = re.sub(r"\[CQ:[^\]]*\]", "", raw).strip()
+        content = content.strip()
+        if content not in ("1", "0"):
+            return  # 仅接受纯 1 / 0（且必须回复询问消息）
+        reply_id = self.get_reply_id(event)
+        if not reply_id:
+            return  # 未回复询问消息，忽略
+        # 精确匹配：该询问消息对应的成员
         api = get_api()
         if api is None:
             return
-        for uid in targets:
-            extras = self.store.get_extras(group_id, uid)
-            if agree:
-                ok = await api.set_group_kick_member(group_id, uid)
-                extras["observe_pending"] = "resolved"
-                self.logger.info(f"群主同意移出 群:{group_id} 成员:{uid} 结果:{ok}")
-            else:
-                extras["observe_pending"] = "rejected"
-                self.logger.info(f"群主拒绝移出 群:{group_id} 成员:{uid}（保留）")
-            self.store.set_extras(group_id, uid, extras)
+        for member in self.store.get_members(group_id):
+            extras = self.store.get_extras(group_id, member["user_id"])
+            if extras.get("observe_pending") == "asking" and extras.get("observe_ask_msg_id") == reply_id:
+                if content == "1":
+                    ok = await api.set_group_kick_member(group_id, member["user_id"])
+                    extras["observe_pending"] = "resolved"
+                    self.logger.info(f"群管回复 1 同意移出 群:{group_id} 成员:{member['user_id']} 结果:{ok}")
+                else:
+                    extras["observe_pending"] = "rejected"
+                    self.logger.info(f"群管回复 0 拒绝移出 群:{group_id} 成员:{member['user_id']}（保留）")
+                self.store.set_extras(group_id, member["user_id"], extras)
+                return
 
     # ---------- 活跃记录 ----------
 
