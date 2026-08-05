@@ -27,6 +27,8 @@ class GroupManagerService:
         self.logger = Logger("group_manager")
         self.store = member_store.member_store
         self.bj_tz = pytz.timezone(TIMEZONE)
+        # 最近一次 /inactive 列表缓存（group_id -> 完整降序 user_id 列表），供 /kick 数字序号
+        self._last_inactive: dict[str, list] = {}
 
     def _now_str(self) -> str:
         return datetime.now(self.bj_tz).strftime("%Y-%m-%d %H:%M:%S")
@@ -373,6 +375,107 @@ class GroupManagerService:
         extras["inactive_reminded"] = today
         self.store.set_extras(group_id, user_id, extras)
         self.logger.info(f"不活跃提醒 群:{group_id} 用户:{user_id} 剩余:{left}天")
+
+    # ---------- 不活跃成员列表 / 批量踢人 ----------
+
+    def _member_inactive_days(self, member: dict, now: datetime):
+        """成员未活跃天数；无活跃记录按入群时间兜底；无法解析返回 None"""
+        last = member.get("last_active") or member.get("join_time")
+        if not last:
+            return None
+        try:
+            last_dt = datetime.strptime(last, "%Y-%m-%d %H:%M:%S").replace(tzinfo=self.bj_tz)
+        except ValueError:
+            return None
+        return (now - last_dt).days
+
+    def list_inactive_members(self, group_id: str, days: int, page: int = 1, page_size: int = 10) -> str:
+        """列出本群不活跃成员：序号 + @ + 未活跃天数，按天数降序，分页；缓存完整列表供 /kick 用"""
+        days = max(1, days)
+        now = datetime.now(self.bj_tz)
+        rows = []
+        for member in self.store.get_members(group_id):
+            uid = member.get("user_id")
+            if not uid or uid == get_self_id():
+                continue
+            inactive = self._member_inactive_days(member, now)
+            if inactive is None or inactive < days:
+                continue
+            rows.append((uid, inactive))
+        # 降序：未活跃天数多者在前，同天数按 QQ 号
+        rows.sort(key=lambda r: (-r[1], r[0]))
+        self._last_inactive[group_id] = [uid for uid, _ in rows]
+
+        total = len(rows)
+        pages = max(1, -(-total // page_size))
+        page = max(1, min(page, pages))
+        lines = [f"📋 本群不活跃成员（≥{days} 天，共 {total} 人，第 {page}/{pages} 页）"]
+        for idx, (uid, inactive) in enumerate(
+            rows[(page - 1) * page_size: page * page_size], (page - 1) * page_size + 1
+        ):
+            lines.append(f"{idx}. [CQ:at,qq={uid}]  未活跃 {inactive} 天")
+        if total:
+            lines.append("💡 /kick 批量移出：/kick 1 3 @用户 QQ号（数字=本列表序号）")
+        else:
+            lines.append("✅ 没有不活跃成员")
+        return "\n".join(lines)
+
+    async def kick_members(self, group_id: str, operator_id: str, raw: str) -> str:
+        """批量踢人：@用户 / QQ号 / 上次 /inactive 列表序号（可混合、空格分隔）"""
+        parts = raw.split()
+        if len(parts) < 2:
+            return "用法：/kick @用户 QQ号 列表序号（可混合，空格分隔）"
+        api = get_api()
+        if api is None:
+            return "连接不可用，请稍后重试"
+
+        role_map = {str(m.get("user_id") or ""): m.get("role", "")
+                    for m in await api.get_group_member_list(group_id)}
+        cached = self._last_inactive.get(group_id, [])
+
+        targets = []
+        for p in parts[1:]:
+            if p.startswith("[CQ:at"):
+                uid = self.parse_at(p)
+                if uid:
+                    targets.append(uid)
+            elif p.isdigit():
+                n = int(p)
+                if cached and 1 <= n <= len(cached):
+                    targets.append(cached[n - 1])  # 上一步列表序号
+                else:
+                    targets.append(p)  # 按 QQ 号
+        # 去重（保持顺序）
+        seen, uniq = set(), []
+        for t in targets:
+            if t and t not in seen:
+                seen.add(t)
+                uniq.append(t)
+
+        from app.permission import permission_service
+        ok_list, skip = [], []
+        for uid in uniq:
+            if uid == get_self_id():
+                skip.append(f"{uid}(机器人自己)")
+            elif uid not in role_map:
+                skip.append(f"{uid}(不在群成员)")
+            elif role_map.get(uid) in ("owner", "admin"):
+                skip.append(f"{uid}(群主/管理员)")
+            elif permission_service.check_user_permission(group_id, uid, 2):
+                skip.append(f"{uid}(有权限)")
+            elif await api.set_group_kick_member(group_id, uid):
+                ok_list.append(uid)
+            else:
+                skip.append(f"{uid}(踢出失败)")
+
+        if not ok_list and not skip:
+            return "未识别到有效目标"
+        text = f"✅ 已移出 {len(ok_list)} 人" + (
+            "：" + " ".join(f"[CQ:at,qq={u}]" for u in ok_list) if ok_list else ""
+        )
+        if skip:
+            text += f"\n⏭️ 跳过 {len(skip)} 人：" + "、".join(skip[:8]) + ("…" if len(skip) > 8 else "")
+        return text
 
     # ---------- 工具 ----------
 

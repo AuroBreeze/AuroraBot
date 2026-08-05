@@ -38,6 +38,7 @@ class FakeAPI:
         self.kicked = []
         self.approved = []
         self.member_infos = {}   # user_id -> dict（存在=是群成员）
+        self.member_roles = {}   # user_id -> role（owner/admin/member）
 
     async def send_group_message(self, group_id, text):
         self.messages.append(("group", group_id, text))
@@ -60,7 +61,7 @@ class FakeAPI:
         return {}
 
     async def get_group_member_list(self, group_id):
-        return []
+        return [{"user_id": uid, "role": role} for uid, role in self.member_roles.items()]
 
 
 def make_svc():
@@ -575,6 +576,69 @@ def test_inactive_kick():
     check("提醒不重复", len(api.messages) == 0, str(api.messages))
 
 
+def test_inactive_list_and_kick():
+    print("\n[15] 不活跃列表 + 批量踢人（/inactive /kick）")
+    import pytz
+    from datetime import datetime, timedelta
+    from app.core.runtime import set_api, set_self_id
+
+    svc, store = make_svc()
+    api = FakeAPI()
+    api.member_roles = {
+        "1001": "member", "1002": "member", "1003": "member",
+        "1004": "member", "1005": "admin", "9001": "owner",
+    }
+    set_api(api)
+    set_self_id("9001")
+    tz = pytz.timezone("Asia/Shanghai")
+    now = datetime.now(tz)
+    fmt = lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S")
+    # 无发言记录 → 按入群时间兜底计未活跃天数（bot 9001 不应出现在列表）
+    store.record_join("g1", "1001", fmt(now - timedelta(days=15)))
+    store.record_join("g1", "1002", fmt(now - timedelta(days=9)))
+    store.record_join("g1", "1003", fmt(now - timedelta(days=3)))
+    store.record_join("g1", "1004", fmt(now - timedelta(days=20)))
+    store.record_join("g1", "1005", fmt(now - timedelta(days=12)))
+    store.record_join("g1", "9001", fmt(now - timedelta(days=30)))
+    store.record_message("g1", "1002")  # 有活跃记录（今天）→ 0 天，应被过滤
+
+    text = svc.list_inactive_members("g1", 7, 1)
+    check("列表标题含总数与分页", "共 3 人" in text and "第 1/1 页" in text, text)
+    check("降序：最不活跃在前", text.index("1004") < text.index("1001") < text.index("1005"), text)
+    check("每行 @ 成员", "[CQ:at,qq=1004]" in text and "[CQ:at,qq=1001]" in text, text)
+    check("显示未活跃天数", "未活跃 20 天" in text and "未活跃 15 天" in text, text)
+    check("今日活跃成员被过滤", "1002" not in text.splitlines()[1:] and "未活跃 0 天" not in text, text)
+    check("机器人自己不出现在列表", "9001" not in text, text)
+
+    # 分页：再入 12 人 → 共 16 人 → 2 页
+    for i in range(12):
+        store.record_join("g1", f"70{i:02d}", fmt(now - timedelta(days=10)))
+    text_p1 = svc.list_inactive_members("g1", 7, 1)
+    check("分页标题 第1/2页", "第 1/2 页" in text_p1, text_p1)
+    text_p2 = svc.list_inactive_members("g1", 7, 2)
+    check("第2页有序号", "11." in text_p2, text_p2)
+    check("页码越界回退", "第 99/2 页" not in svc.list_inactive_members("g1", 7, 99), svc.list_inactive_members("g1", 7, 99))
+
+    async def run_kick(raw):
+        return await svc.kick_members("g1", "1001", raw)
+
+    t = asyncio.run(run_kick("/kick 1 2"))
+    check("序号踢出", "已移出 2 人" in t and "1004" in t and "1001" in t, t)
+    check("踢出调用记录", ("g1", "1004") in api.kicked and ("g1", "1001") in api.kicked, str(api.kicked))
+    t = asyncio.run(run_kick("/kick [CQ:at,qq=1003]"))
+    check("@ 踢出", "已移出 1 人" in t and "1003" in t, t)
+    t = asyncio.run(run_kick("/kick 99999999"))
+    check("非成员 QQ 号跳过", "不在群成员" in t, t)
+    t = asyncio.run(run_kick("/kick 1005 9001"))
+    check("管理员与机器人跳过", "群主/管理员" in t and "机器人自己" in t, t)
+    t = asyncio.run(run_kick("/kick"))
+    check("无参数提示用法", "用法" in t, t)
+    t = asyncio.run(run_kick("/kick 3 [CQ:at,qq=1001] 99999999"))
+    check("混合+去重+跳过", "已移出" in t and "不在群成员" in t, t)
+    t = asyncio.run(run_kick("/kick 999999"))
+    check("序号不存在按QQ号处理", "不在群成员" in t, t)
+
+
 def test_gm_config_command():
     print("\n[14] 群管配置命令（/gm_config：查看/修改/持久化）")
     from app.group_manager.commands import _gm_config_handler
@@ -631,6 +695,7 @@ if __name__ == "__main__":
     test_members_list()
     test_never_kick_self()
     test_inactive_kick()
+    test_inactive_list_and_kick()
     test_gm_config_command()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)

@@ -65,6 +65,26 @@ async def _gm_config_handler(websocket, message) -> tuple[bool, str]:
     return True, "用法：/gm_config 查看全部配置；/gm_config set <键> <值> 修改"
 
 
+async def _inactive_handler(websocket, message) -> tuple[bool, str]:
+    """/inactive [天数] [页码]：列出本群不活跃成员（@ + 未活跃天数，降序，分页）"""
+    group_id = str(message.get("group_id", ""))
+    parts = str(message.get("raw_message", "")).split()
+    days = gm_config.get_int("inactive_kick_days", 7)
+    page = 1
+    if len(parts) > 1 and parts[1].isdigit():
+        days = int(parts[1])
+    if len(parts) > 2 and parts[2].isdigit():
+        page = int(parts[2])
+    return True, group_manager_service.list_inactive_members(group_id, days, page)
+
+
+async def _kick_handler(websocket, message) -> tuple[bool, str]:
+    """/kick 目标...：批量踢人（@ / QQ号 / 上次 /inactive 列表序号）"""
+    group_id = str(message.get("group_id", ""))
+    operator = str(message.get("user_id", ""))
+    return True, await group_manager_service.kick_members(group_id, operator, str(message.get("raw_message", "")))
+
+
 def _register():
     registry.register(Command(
         name="/members",
@@ -121,6 +141,32 @@ def _register():
         example="/gm_config\n/gm_config set inactive_kick_enabled true\n"
                 "/gm_config set welcome_msg 第一行\\n第二行",
         required_level=LEVEL_SYSTEM, app_name=APP,
+    ))
+    registry.register(Command(
+        name="/inactive",
+        aliases=["inactive", "不活跃"],
+        handler=_inactive_handler,
+        description="列出本群不活跃成员（@+未活跃天数，降序，分页）",
+        usage="[天数，默认配置阈值] [页码，默认 1]",
+        detail="列出本群未活跃成员：每行序号 + @ + 未活跃天数，按天数降序。\n"
+               "默认阈值为 inactive_kick_days；每页 10 人。\n"
+               "列表序号可直接用于 /kick 批量移出。",
+        example="/inactive\n/inactive 3\n/inactive 7 2",
+        required_level=LEVEL_ADMIN, app_name=APP,
+    ))
+    registry.register(Command(
+        name="/kick",
+        aliases=["kick", "踢人"],
+        handler=_kick_handler,
+        description="批量移出不活跃/指定成员（@ / QQ号 / 列表序号）",
+        usage="目标...（@用户 / QQ号 / 上次 /inactive 列表序号，可混合）",
+        detail="批量移出成员：\n"
+               "- @目标：@用户\n"
+               "- QQ号：直接输入\n"
+               "- 列表序号：先用 /inactive 查看，数字即该列表序号\n"
+               "自动跳过：机器人自己/群主管理员/有权限用户/非群成员。",
+        example="/kick 1 3\n/kick @user1 @user2\n/kick 1 @user3 123456789",
+        required_level=LEVEL_ADMIN, app_name=APP,
     ))
 
     # 热更新清单：config（依赖最前）→ service → commands（events 为接线层不重载）
