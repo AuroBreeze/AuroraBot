@@ -7,24 +7,29 @@ async def main():
     from app.core.hot_reload import hot_reloader
     await hot_reloader.start_watch(interval=2.0)
 
-    # 自动补记录：未处理过的群自动补一次（幂等，周期检查；API 未连接时静默跳过）
     from app.core.tasks import task_scheduler
     from app.group_manager import config as gm_config
-    from app.group_manager.service import group_manager_service
-    if gm_config.get_bool("auto_backfill", True):
-        interval = gm_config.get_int("auto_backfill_interval", 300)
-        task_scheduler.periodic(
-            "gm_auto_backfill", interval,
-            group_manager_service.auto_backfill_pending,
-        )
 
-    # 不活跃自动踢人：定期扫描超期成员（排除群主/管理员/有权限用户，踢前提醒）
-    if gm_config.get_bool("inactive_kick_enabled", True):
-        interval = gm_config.get_int("inactive_kick_interval", 3600)
-        task_scheduler.periodic(
-            "gm_inactive_kick", interval,
-            group_manager_service.scan_inactive_members,
-        )
+    # 后台周期任务始终注册（开关由 service 方法内部自检，/gm_config set 后动态生效）；
+    # 包装函数延迟取最新单例，避免热更新重载后任务绑定旧实例/旧配置
+    async def _auto_backfill_latest():
+        from app.group_manager.service import group_manager_service
+        await group_manager_service.auto_backfill_pending()
+
+    async def _scan_inactive_latest():
+        from app.group_manager.service import group_manager_service
+        await group_manager_service.scan_inactive_members()
+
+    task_scheduler.periodic(
+        "gm_auto_backfill",
+        gm_config.get_int("auto_backfill_interval", 300),
+        _auto_backfill_latest,
+    )
+    task_scheduler.periodic(
+        "gm_inactive_kick",
+        gm_config.get_int("inactive_kick_interval", 3600),
+        _scan_inactive_latest,
+    )
 
     ws_receiver = Websocket_receiver()
     await ws_receiver.start_receiver()
