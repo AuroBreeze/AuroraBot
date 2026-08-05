@@ -59,9 +59,13 @@ class GroupManagerService:
             group_id, user_id,
         )
 
-        # 欢迎 + 规则 + 链接 + 段位询问（要求回复此条消息登记）
+        # 欢迎 + 规则 + 链接 + 段位询问（要求回复此条消息登记）；@ 新人，不显示纯数字
         msg = self._welcome_text(user_id, observe_minutes)
-        msg_id = await api.send_group_message(group_id, msg)
+        msg_id = await api.send_group_message_array(group_id, [
+            {"type": "at", "data": {"qq": user_id}},
+            {"type": "text", "data": {"text": " "}},
+            {"type": "text", "data": {"text": msg}},
+        ])
 
         # 段位询问状态机：记录欢迎消息 id，用户回复该消息才登记
         extras = self.store.get_extras(group_id, user_id)
@@ -129,12 +133,13 @@ class GroupManagerService:
         from app.core.permission import permission_service
         owner = next((str(m.get("user_id")) for m in members if m.get("role") == "owner"), None)
         if owner:
-            # 阶段 1：只 @ 群主；超时未回复 → 升级任务
+            # 阶段 1：只 @ 群主（同时 @ 新人指明对象）；超时未回复 → 升级任务
             minutes = gm_config.get_int("observe_minutes", 10)
             msg_id = await api.send_group_message_array(group_id, [
                 {"type": "at", "data": {"qq": owner}},
+                {"type": "at", "data": {"qq": user_id}},
                 {"type": "text", "data": {
-                    "text": f" ⚠️ 成员 {user_id} 入群 {minutes} 分钟未发言，是否移出？\n"
+                    "text": f" ⚠️ 新人入群 {minutes} 分钟未发言，是否移出？\n"
                             f"同意：回复此消息 1\n拒绝：回复此消息 0",
                 }},
             ])
@@ -184,8 +189,9 @@ class GroupManagerService:
         targets = (online or [uid for uid, _ in ranked])[:at_most]
         minutes = gm_config.get_int("observe_minutes", 10)
         at_segs = [{"type": "at", "data": {"qq": m}} for m in targets]
+        at_segs.append({"type": "at", "data": {"qq": user_id}})  # @ 新人指明对象
         at_segs.append({"type": "text", "data": {
-            "text": f" ⚠️ 群主暂未处理，成员 {user_id} 入群 {minutes} 分钟未发言，是否移出？\n"
+            "text": f" ⚠️ 群主暂未处理，新人入群 {minutes} 分钟未发言，是否移出？\n"
                     f"同意：回复此消息 1\n拒绝：回复此消息 0",
         }})
         msg_id = await api.send_group_message_array(group_id, at_segs)

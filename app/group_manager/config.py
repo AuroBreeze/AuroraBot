@@ -59,7 +59,7 @@ DEFAULTS = {
     "inactive_remind_days": 1,      # 踢前提醒（剩余天数）
     "inactive_kick_interval": 3600, # 不活跃扫描间隔（秒）
     "inactive_remind_msg": "⚠️ 您已超过 {days} 天未发言，{left} 天后将被移出群聊，请尽快发言报到！",
-    "welcome_msg": "欢迎 {user} 加入本群！\n请阅读群规：\n{rules}\n{link}\n\n{question}",
+    "welcome_msg": "欢迎加入本群！\n请阅读群规：\n{rules}\n{link}\n\n{question}",
     "rules_msg": "入群 {minutes} 分钟内发言即可避免被移出群聊，请尽快发言报到。",
     "link": "",
     "tier_question": "（选填）回复此条消息可登记您的游戏段位及游玩时间，方便群管理，如：王者",

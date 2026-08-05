@@ -111,10 +111,11 @@ def test_member_join_flow():
     m = store.get_member("g1", "u9")
     check("成员已记录", m is not None and m["join_time"] is not None)
     check("观察期任务已调度", f"observe_g1_u9" in active, str(active))
-    check("欢迎消息已发送", len(api.messages) == 1 and api.messages[0][0] == "group"
-          and "u9" in api.messages[0][2] and "10" in api.messages[0][2], str(api.messages))
+    check("欢迎消息已发送（@新人+文本）", len(api.messages) == 1 and api.messages[0][0] == "array"
+          and api.messages[0][2][0] == {"type": "at", "data": {"qq": "u9"}}
+          and "欢迎加入本群" in api.messages[0][2][-1]["data"]["text"], str(api.messages))
     check("段位询问状态已置", store.get_extras("g1", "u9").get("flow") == "awaiting_tier")
-    check("欢迎消息 id 已记录", store.get_extras("g1", "u9").get("welcome_msg_id") == "msg-123")
+    check("欢迎消息 id 已记录", store.get_extras("g1", "u9").get("welcome_msg_id") == "ask-1")
 
 
 def test_observation_kick():
@@ -302,8 +303,8 @@ def test_event_bus_integration():
             raw_message = None
             data = {"group_id": "g1", "user_id": "uNew", "message_type": "group"}
         asyncio.run(event_bus.emit(Event(type=EventType.GROUP_INCREASE, data=Ev.data)))
-        check("事件驱动入群引导", len(api.messages) == 1 and api.messages[0][0] == "group"
-              and "uNew" in api.messages[0][2], str(api.messages))
+        check("事件驱动入群引导", len(api.messages) == 1 and api.messages[0][0] == "array"
+              and api.messages[0][2][0] == {"type": "at", "data": {"qq": "uNew"}}, str(api.messages))
         m = store.get_member("g1", "uNew")
         check("事件驱动成员记录", m is not None and m["extras"].get("flow") == "awaiting_tier")
         from app.core.tasks import task_scheduler
@@ -766,7 +767,7 @@ def test_observe_ask_owner_and_nickname():
         asked = asked_msgs()
         check("询问消息已发送", len(asked) == 1, len(asked))
         ats = {s.get("data", {}).get("qq") for s in asked[0][2] if s.get("type") == "at"}
-        check("阶段1只@群主", ats == {"OWNER"}, ats)
+        check("阶段1只@群主+新人", ats == {"OWNER", "u1"}, ats)
         check("pending 状态已记录", store.get_extras("g1", "u1").get("observe_pending") == "asking")
         check("阶段为 owner", store.get_extras("g1", "u1").get("observe_phase") == "owner")
         ask_id_u1 = store.get_extras("g1", "u1")["observe_ask_msg_id"]
@@ -794,7 +795,7 @@ def test_observe_ask_owner_and_nickname():
         escalated = [m for m in api.messages if m[0] == "array" and "群主暂未处理" in text_of(m)]
         check("升级询问已发送", len(escalated) == 1, len(escalated))
         ats2 = {s.get("data", {}).get("qq") for s in escalated[0][2] if s.get("type") == "at"}
-        check("升级只@在线的管理员", ats2 == {"ADMIN"}, ats2)
+        check("升级只@在线的管理员+新人", ats2 == {"ADMIN", "u3"}, ats2)
         check("阶段变为 managers", store.get_extras("g1", "u3").get("observe_phase") == "managers")
 
         # 管理员回复升级询问 1 → 踢出
@@ -814,7 +815,7 @@ def test_observe_ask_owner_and_nickname():
         asked2 = [m for m in api2.messages if m[0] == "array" and "群主暂未处理" in text_of(m)]
         check("无群主群直接阶段2", len(asked2) == 1, len(asked2))
         ats3 = {s.get("data", {}).get("qq") for s in asked2[0][2] if s.get("type") == "at"}
-        check("无群主时@在线被授权用户", ats3 == {"VIP"}, ats3)
+        check("无群主时@在线被授权用户+新人", ats3 == {"VIP", "u5"}, ats3)
         set_api(api)  # 恢复
 
         # 回复了询问消息但内容非纯 1/0 → 忽略（防误触）
