@@ -41,6 +41,7 @@ class FakeAPI:
 
     async def send_group_message(self, group_id, text):
         self.messages.append(("group", group_id, text))
+        return "msg-123"   # 模拟返回 message_id
 
     async def send_at_group_message(self, group_id, user_id, text):
         self.messages.append(("at", group_id, text, user_id))
@@ -102,6 +103,7 @@ def test_member_join_flow():
     check("欢迎消息已发送", len(api.messages) == 1 and api.messages[0][0] == "group"
           and "u9" in api.messages[0][2] and "10" in api.messages[0][2], str(api.messages))
     check("段位询问状态已置", store.get_extras("g1", "u9").get("flow") == "awaiting_tier")
+    check("欢迎消息 id 已记录", store.get_extras("g1", "u9").get("welcome_msg_id") == "msg-123")
 
 
 def test_observation_kick():
@@ -123,28 +125,50 @@ def test_observation_kick():
 
 
 def test_tier_state_machine():
-    print("\n[4] 段位状态机：询问 → 回复 → 登记")
+    print("\n[4] 段位状态机：回复欢迎消息 → 登记")
     svc, store = make_svc()
     api = FakeAPI()
     runtime.set_api(api)
 
     store.record_join("g1", "u5")
-    # 未询问（无 flow）时回复 → 不登记
-    class Ev1:
-        group_id = "g1"
-        user_id = "u5"
-        raw_message = "钻石"
-        data = {}
-    asyncio.run(svc.handle_tier_reply(Ev1()))
-    check("未询问不登记", store.get_extras("g1", "u5").get("tier") is None)
+    store.set_extras("g1", "u5", {"flow": "awaiting_tier", "welcome_msg_id": "msg-123"})
 
-    # 询问后回复 → 登记
-    store.set_extras("g1", "u5", {"flow": "awaiting_tier"})
-    asyncio.run(svc.handle_tier_reply(Ev1()))
-    check("段位已登记", store.get_extras("g1", "u5").get("tier") == "钻石")
+    def ev(raw, message_segments=None):
+        return type("Ev", (), {
+            "group_id": "g1", "user_id": "u5", "raw_message": raw,
+            "data": {"message": message_segments or []},
+        })
+
+    # 未回复欢迎消息（普通发言）→ 不登记
+    asyncio.run(svc.handle_tier_reply(ev("钻石")))
+    check("普通发言不登记", store.get_extras("g1", "u5").get("tier") is None)
+
+    # 回复了别的消息（reply id 不匹配）→ 不登记
+    asyncio.run(svc.handle_tier_reply(ev("钻石", [{"type": "reply", "data": {"id": "999"}}])))
+    check("回复其他消息不登记", store.get_extras("g1", "u5").get("tier") is None)
+
+    # 回复欢迎消息（array reply 段匹配）→ 登记
+    asyncio.run(svc.handle_tier_reply(ev("钻石", [{"type": "reply", "data": {"id": "msg-123"}}])))
+    check("回复欢迎消息登记", store.get_extras("g1", "u5").get("tier") == "钻石")
     check("流程已结束", store.get_extras("g1", "u5").get("flow") == "")
     check("确认消息以 at 发送", len(api.messages) == 1 and api.messages[0][0] == "at"
           and api.messages[0][3] == "u5" and "钻石" in api.messages[0][2], str(api.messages))
+
+    # raw_message 兜底：CQ:reply 码匹配（message_id 为数字）
+    api.messages.clear()
+    store.record_join("g1", "u6")
+    store.set_extras("g1", "u6", {"flow": "awaiting_tier", "welcome_msg_id": "456"})
+    ev2 = type("Ev", (), {
+        "group_id": "g1", "user_id": "u6",
+        "raw_message": "[CQ:reply,id=456] 铂金",
+        "data": {"message": []},
+    })
+    asyncio.run(svc.handle_tier_reply(ev2))
+    check("CQ:reply 兜底登记", store.get_extras("g1", "u6").get("tier") == "铂金")
+
+    # get_reply_id 两种来源
+    check("get_reply_id 数组段", svc.get_reply_id(type("E", (), {"data": {"message": [{"type": "reply", "data": {"id": "abc"}}]}, "raw_message": ""})()) == "abc")
+    check("get_reply_id CQ 码", svc.get_reply_id(type("E", (), {"data": {"message": []}, "raw_message": "[CQ:reply,id=-42] x"})()) == "-42")
 
 
 def test_auto_approve():

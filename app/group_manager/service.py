@@ -49,13 +49,14 @@ class GroupManagerService:
             group_id, user_id,
         )
 
-        # 欢迎 + 规则 + 链接 + 段位询问
+        # 欢迎 + 规则 + 链接 + 段位询问（要求回复此条消息登记）
         msg = self._welcome_text(user_id, observe_minutes)
-        await api.send_group_message(group_id, msg)
+        msg_id = await api.send_group_message(group_id, msg)
 
-        # 段位询问状态机：置 awaiting_tier
+        # 段位询问状态机：记录欢迎消息 id，用户回复该消息才登记
         extras = self.store.get_extras(group_id, user_id)
         extras["flow"] = "awaiting_tier"
+        extras["welcome_msg_id"] = str(msg_id) if msg_id is not None else ""
         self.store.set_extras(group_id, user_id, extras)
 
     def _welcome_text(self, user_id: str, minutes: int) -> str:
@@ -92,7 +93,10 @@ class GroupManagerService:
     # ---------- 段位状态机 ----------
 
     async def handle_tier_reply(self, event) -> None:
-        """用户回复段位（MESSAGE 事件）：flow==awaiting_tier → 登记并确认"""
+        """
+        用户回复欢迎消息登记段位（MESSAGE 事件）：
+        仅当消息带 reply 段且 reply id == 欢迎消息 id 时登记，否则忽略。
+        """
         api = get_api()
         if api is None:
             return
@@ -106,10 +110,20 @@ class GroupManagerService:
         if extras.get("flow") != "awaiting_tier":
             return
 
-        extras["tier"] = raw
+        # 必须回复群管发送的欢迎消息
+        reply_id = self.get_reply_id(event)
+        if not reply_id or reply_id != extras.get("welcome_msg_id"):
+            return
+
+        # 剥离回复/@ 等 CQ 段，只保留纯文本作为段位
+        clean = re.sub(r"\[CQ:[^\]]+\]", "", raw).strip()
+        if not clean:
+            return
+
+        extras["tier"] = clean
         extras["flow"] = ""  # 流程完成
         self.store.set_extras(group_id, user_id, extras)
-        confirm = gm_config.get()["tier_confirm"].format(tier=raw)
+        confirm = gm_config.get()["tier_confirm"].format(tier=clean)
         # 用 at 段发送（文本里的 CQ 码不会解析）
         await api.send_at_group_message(group_id, user_id, confirm)
 
@@ -170,6 +184,18 @@ class GroupManagerService:
         return f"用户 {user_id} 不是本群成员"
 
     # ---------- 工具 ----------
+
+    @staticmethod
+    def get_reply_id(event) -> str:
+        """
+        提取消息引用的回复消息 id（回复群管欢迎消息用）：
+        优先 message 数组的 reply 段，兜底 raw_message 中的 CQ:reply 码
+        """
+        for seg in (event.data.get("message") or []):
+            if seg.get("type") == "reply":
+                return str(seg.get("data", {}).get("id", ""))
+        m = re.search(r"\[CQ:reply,id=(-?\d+)\]", str(event.raw_message or ""))
+        return m.group(1) if m else ""
 
     @staticmethod
     def parse_at(raw: str) -> str:

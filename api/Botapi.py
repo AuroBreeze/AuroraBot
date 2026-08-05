@@ -73,32 +73,22 @@ class QQAPI_list:
         await self.websocket.send(json.dumps(json_message))
         self.Logger.info("发送消息:%s,接收者:%s"%(message,user_id))
         # await asyncio.sleep(2)
-    async def send_group_message(self,group_id:str,message:str):
+    async def send_group_message(self, group_id: str, message: str):
         """
-        发送群消息
-
-        :param group_id:群号
-        :param message:消息
-        :return: None
+        发送群消息；返回 message_id（供回复匹配等使用），失败返回 None
         """
-
-        json_message = {
-            "action": "send_group_msg",
-            "params":{
-                "group_id": group_id,
-                "message": [
-                    {
-                        "type": "text",
-                        "data": {
-                            "text": message
-                        }
-                     }
-                ]
-                }
-        }
-        await self.websocket.send(json.dumps(json_message))
-        self.Logger.info("发送群消息:%s,群号:%s"%(message,group_id))
-        # await asyncio.sleep(1.5)
+        ok, data, msg = await self._call(
+            "send_group_msg",
+            {
+                "group_id": str(group_id),
+                "message": [{"type": "text", "data": {"text": message}}],
+            },
+        )
+        if ok:
+            self.Logger.info("发送群消息:%s,群号:%s" % (message, group_id))
+            return (data or {}).get("message_id")
+        self.Logger.error(f"发送群消息失败 群:{group_id}: {msg}")
+        return None
     
     async def send_at_group(self,group_id:str,user_id:str):
         """
