@@ -181,11 +181,70 @@ def test_handler_exception_handled():
     check("异常提示已回复", len(ws.sent) == 1 and "执行出错" in text, text)
 
 
+def test_validation_rejects_bad_commands():
+    print("\n[6] 格式校验：拒绝非法命令定义")
+    r = CommandRegistry()
+
+    async def h(ws, m):
+        return True, None
+
+    check("空命令名被拒", not r.register(Command(name="", handler=h)))
+    check("含空格命令名被拒", not r.register(Command(name="/bad name", handler=h)))
+    check("handler 不可调用被拒", not r.register(Command(name="/no_handler", handler="not_callable")))
+    check("非法级别被拒", not r.register(Command(name="/bad_level", handler=h, required_level=99)))
+    check("子命令缺说明被拒", not r.register(Command(
+        name="/bad_sub", handler=h, sub_commands={"添加": ""})))
+    check("合法命令注册成功", r.register(Command(name="/good", handler=h, required_level=LEVEL_NONE)))
+    check("被拒命令未进入注册表", r.match("/bad name") is None and r.match("/no_handler") is None)
+    check("被拒记录进入 audit.conflicts", any(c["name"] == "/bad_level" for c in r.audit()["conflicts"]))
+
+
+def test_audit_and_prefix_conflict():
+    print("\n[7] 审计：统计 / 前缀重叠 / 报告文本")
+    r = CommandRegistry()
+
+    async def h(ws, m):
+        return True, None
+
+    r.register(Command(name="/定时喊话", handler=h, app_name="A", required_level=LEVEL_NONE))
+    r.register(Command(name="/list_user", handler=h, app_name="B", aliases=["list_user"], required_level=LEVEL_NONE))
+
+    # 前缀重叠：/定时 与 /定时喊话 互为前缀
+    r.register(Command(name="/定时", handler=h, app_name="C", required_level=LEVEL_NONE))
+
+    a = r.audit()
+    check("统计总数", a["total"] == 3, str(a))
+    check("按 app 统计", a["apps"].get("A") == 1 and a["apps"].get("B") == 1)
+    check("无注册冲突", a["conflicts"] == [])
+    check("检测到跨 app 前缀冲突", any(
+        ("/定时" in ka and "/定时喊话" in kb) or ("/定时" in kb and "/定时喊话" in ka)
+        for ka, kb, cross in a["prefix_conflicts"] if cross
+    ), str(a["prefix_conflicts"]))
+
+    report = r.report_text()
+    check("报告含统计", "3 条命令" in report)
+    check("报告含无冲突", "无注册冲突" in report)
+    check("报告含跨 app 冲突标题", "跨 app 前缀冲突" in report)
+
+    # 同 app 内前缀重叠（有意的关联命令，仅提示）
+    r.register(Command(name="/list_user2", handler=h, app_name="B", required_level=LEVEL_NONE))
+    report2 = r.report_text()
+    check("报告含同 app 提示标题", "同 app 前缀重叠" in report2)
+
+    # 冲突后 audit 反映
+    r.register(Command(name="/定时喊话", handler=h, app_name="D"))  # 同名被拒
+    a2 = r.audit()
+    check("同名冲突进入 audit.conflicts", len(a2["conflicts"]) == 1 and a2["conflicts"][0]["name"] == "/定时喊话")
+    check("冲突后报告不再说无冲突", "无注册冲突" not in r.report_text())
+
+
 if __name__ == "__main__":
     test_register_and_conflict()
     test_match()
     test_dispatch_auth_and_reply()
     test_help_filter_and_group()
     test_handler_exception_handled()
+    test_validation_rejects_bad_commands()
+    test_audit_and_prefix_conflict()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)
