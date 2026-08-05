@@ -48,6 +48,36 @@ class GroupService:
             features=data['features'],
         )
 
+    async def authorize_group_simple(self, message) -> tuple[bool, str]:
+        """
+        简单版群授权：/订阅群 <目标群号> <天数> [获权用户]
+        默认 starttime=now、features=all；获权用户缺省为命令执行者
+        """
+        msg = str(message.get("raw_message"))
+        parts = msg.split()
+        if not parts or parts[0] not in ("/订阅群", "订阅群", "sub_group"):
+            self.logger.debug("无效的简单版群授权命令格式")
+            return False, None
+        if len(parts) < 3:
+            return False, "格式: /订阅群 <目标群号> <天数> [获权用户]"
+        target_group = parts[1]
+        try:
+            days = int(parts[2])
+        except ValueError:
+            return False, "天数必须是整数"
+        if days < 0:
+            return False, "天数不能为负数"
+        owner_id = parts[3] if len(parts) > 3 else str(message.get("user_id"))
+
+        return permission_service.subscribe_group(
+            operator_id=str(message.get("user_id")),
+            target_group=target_group,
+            owner_id=owner_id,
+            start_time="now",
+            end_time_days=days,
+            features="all",
+        )
+
     async def remove_authorization(self, message) -> tuple[bool, str]:
         """删除群组授权"""
         msg = str(message.get("raw_message"))

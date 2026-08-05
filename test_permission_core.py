@@ -3,6 +3,7 @@
 
 运行: uv run python test_permission_core.py
 """
+import asyncio
 import os
 import sys
 import tempfile
@@ -151,6 +152,52 @@ def test_admin_raise_cross_group():
     check("USER_B 获得 3 级", svc.check_user_permission(GROUP_1, USER_B, LEVEL_ADMIN))
 
 
+def test_simple_subscribe_command():
+    print("\n[7] 简单版群授权命令 /订阅群")
+    from app.Lssuing.services.admin.group_service import GroupService
+    import app.Lssuing.services.admin.group_service as group_svc_mod
+
+    tmp = tempfile.mkdtemp(prefix="perm_test_sub_")
+    svc = PermissionService(PermissionStore(os.path.join(tmp, "t.db")))
+    svc.store.seed_admin(ADMIN)
+
+    old_perm = group_svc_mod.permission_service
+    group_svc_mod.permission_service = svc
+    try:
+        g = GroupService()
+
+        async def run(raw, uid=ADMIN):
+            return await g.authorize_group_simple({"raw_message": raw, "user_id": uid})
+
+        # 基本：/订阅群 <群号> <天数>，获权用户默认执行者
+        judge, msg = asyncio.run(run("/订阅群 7770001 30"))
+        check("简单版订阅成功", judge, msg)
+        check("群在授权期内", svc.check_group_authorized("7770001"))
+        check("获权用户默认为执行者(2级)", svc.check_user_permission("7770001", ADMIN, LEVEL_OWNER))
+
+        # 显式获权用户
+        judge, msg = asyncio.run(run("/订阅群 7770002 30 20001"))
+        check("显式获权用户生效", judge and svc.check_user_permission("7770002", "20001", LEVEL_OWNER), msg)
+
+        # 别名 sub_group
+        judge, msg = asyncio.run(run("sub_group 7770003 7"))
+        check("别名 sub_group 可用", judge, msg)
+
+        # 参数错误
+        judge, msg = asyncio.run(run("/订阅群 7770004 abc"))
+        check("天数非整数被拒", not judge and "整数" in msg, msg)
+        judge, msg = asyncio.run(run("/订阅群 7770005"))
+        check("缺少参数被拒", not judge and "格式" in msg, msg)
+        judge, msg = asyncio.run(run("/订阅群 7770006 -1"))
+        check("负数天数被拒", not judge and "负数" in msg, msg)
+
+        # 非管理员被拒
+        judge, msg = asyncio.run(run("/订阅群 7770007 30", uid=OWNER))
+        check("非管理员订阅被拒", not judge, msg)
+    finally:
+        group_svc_mod.permission_service = old_perm
+
+
 if __name__ == "__main__":
     test_admin_seed()
     test_subscribe_and_group_auth()
@@ -158,5 +205,6 @@ if __name__ == "__main__":
     test_list_group_users_scope()
     test_kick_and_unsubscribe()
     test_admin_raise_cross_group()
+    test_simple_subscribe_command()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)

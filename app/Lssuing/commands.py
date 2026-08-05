@@ -20,10 +20,18 @@ def _register():
     APP = "权限系统"
 
     registry.register(Command(
+        name="/订阅群",
+        aliases=["订阅群", "sub_group"],
+        handler=partial(admin_group.authorize_group_simple),
+        description="登记授权群组（简单版：now 起生效，功能 all）",
+        usage="<目标群号> <天数> [获权用户，默认自己]",
+        required_level=LEVEL_SYSTEM, app_name=APP,
+    ))
+    registry.register(Command(
         name="/subscribe_group",
         aliases=["subscribe_group"],
         handler=partial(admin_group.authorize_group),
-        description="登记授权群组",
+        description="登记授权群组（完整版：可指定起止时间与功能）",
         usage="<目标群号>\nstarttime now\nendtime <天数>\nuser_id <获权用户>\nfeatures all",
         required_level=LEVEL_SYSTEM, app_name=APP,
     ))
