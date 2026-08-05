@@ -252,12 +252,14 @@ class CommandRegistry:
         if target:
             return self._help_detail(group_id, user_id, target)
 
-        lines = ["命令菜单\n"]
+        lines = [f"命令菜单（{'管理员' if self._is_privileged(group_id, user_id) else '成员'}模式）\n"]
         grouped: dict[str, list[Command]] = {}
+        is_privileged = self._is_privileged(group_id, user_id)
         for cmd in self._commands.values():
             if cmd.name == "/help":
                 continue
-            if not self._can_see(group_id, user_id, cmd):
+            # 权限者看全部命令；非权限者只看自己有权限的命令
+            if not is_privileged and not self._can_see(group_id, user_id, cmd):
                 continue
             grouped.setdefault(cmd.app_name or "其他", []).append(cmd)
 
@@ -270,8 +272,22 @@ class CommandRegistry:
 
         if len(lines) == 1:
             lines.append("暂无可用命令，请联系管理员开通权限")
+        if not is_privileged:
+            lines.append("提示：管理命令（订阅/踢人/刷新/配置等）需要群管理权限")
         lines.append("输入 /help <命令名> 查看命令详情")
         return "\n".join(lines)
+
+    def _is_privileged(self, group_id, user_id) -> bool:
+        """是否为群管理权限者（系统管理员或 Lssuing 2 级及以上）"""
+        try:
+            if permission_service.is_admin(user_id):
+                return True
+        except AttributeError:
+            pass
+        try:
+            return permission_service.check_user_permission(group_id, user_id, 2)
+        except Exception:
+            return False
 
     def _help_detail(self, group_id, user_id, target: str) -> str:
         cmd = self._commands.get(target)
@@ -283,7 +299,7 @@ class CommandRegistry:
             return f"无权查看命令 {target} 的详情"
 
         lines = [
-            f"📌 {cmd.name}" + (f"（别名: {' / '.join(cmd.aliases)}）" if cmd.aliases else ""),
+            f"{cmd.name}" + (f"（别名: {' / '.join(cmd.aliases)}）" if cmd.aliases else ""),
             f"{cmd.description}",
             f"需要权限: {LEVEL_NAMES.get(cmd.required_level, cmd.required_level)}",
         ]

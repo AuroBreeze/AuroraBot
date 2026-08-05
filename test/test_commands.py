@@ -38,9 +38,13 @@ class FakeWS:
 
 class StubPerm:
     """权限 stub：可控的 check_user_permission 结果"""
-    def __init__(self, allowed=True):
+    def __init__(self, allowed=True, is_admin=False):
         self.allowed = allowed
         self.calls = []
+        self._is_admin = is_admin
+
+    def is_admin(self, user_id):
+        return self._is_admin
 
     def check_user_permission(self, group_id, user_id, required_level):
         self.calls.append((group_id, user_id, required_level))
@@ -164,6 +168,7 @@ def test_help_filter_and_group():
         check("管理员看到所有命令", all(x in text for x in ("/admin_cmd", "/user_cmd", "/open")))
         check("按 app 分组", "权限系统" in text and "定时喊话" in text)
         check("显示权限级别", "系统管理员" in text)
+        check("管理员模式标注", "管理员模式" in text)
     finally:
         registry_mod.permission_service = old_perm
 
@@ -176,6 +181,7 @@ def test_help_filter_and_group():
         text = r.help_text("g1", "u3", "")
         check("3级看不到管理员命令", "/admin_cmd" not in text)
         check("3级看到本级别与开放命令", "/user_cmd" in text and "/open" in text)
+        check("非权限者成员模式标注", "成员模式" in text and "需要群管理权限" in text)
     finally:
         registry_mod.permission_service = old_perm
 
