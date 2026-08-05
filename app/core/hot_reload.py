@@ -112,7 +112,7 @@ class HotReloader:
             registry.summary()
             return f"✅ app [{app_name}] 重载成功（{report[0]}，新命令已注册）"
         except Exception as e:
-            self.logger.error(f"app [{app_name}] 重载失败: {e}", exc_info=True)
+            self.logger.error(f"app [{app_name}] 重载失败: {e}")
             registry.summary()
             return f"❌ app [{app_name}] 重载失败: {e}（请检查日志，必要时重启进程）"
         finally:

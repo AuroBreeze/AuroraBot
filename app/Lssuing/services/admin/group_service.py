@@ -178,7 +178,7 @@ class GroupService:
                         # 正常群组
                         normal_groups.append(f"{group_id}(剩余{remaining_days}天)")
                 except Exception as e:
-                    self.logger.error(f"处理群组 {group_id} 时出错: {e}", exc_info=True)
+                    self.logger.error(f"处理群组 {group_id} 时出错: {e}")
                     continue
 
             # 生成结果消息
@@ -197,5 +197,5 @@ class GroupService:
             return True, "\n".join(result_msg)
 
         except Exception as e:
-            self.logger.error(f"检查群组列表时发生未知错误: {e}", exc_info=True)
+            self.logger.error(f"检查群组列表时发生未知错误: {e}")
             return False, "系统错误，请稍后再试"
