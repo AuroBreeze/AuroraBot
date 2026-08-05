@@ -1,11 +1,56 @@
 import asyncio
 import json
+import time
 from api.Logger_owner import Logger
 
 class QQAPI_list:
     def __init__(self,websocket):
         self.websocket = websocket
         self.Logger = Logger("BotAPI")
+        # 统一 API 请求通道：echo -> asyncio.Future（由消息接收层 dispatch_response 投递响应）
+        self._pending: dict[str, asyncio.Future] = {}
+
+    # ---------- 统一请求通道 ----------
+
+    async def _call(self, action: str, params: dict = None, timeout: float = 10.0) -> tuple[bool, object, str]:
+        """
+        统一 OneBot API 调用（OneBot 11 HTTP POST 协议，经 WS 传输）。
+        通过唯一 echo 匹配响应，避免被服务器推送的事件抢占 recv 导致错乱。
+        :return: (是否成功, data, message)
+        """
+        echo = f"{time.time_ns()}-{id(self)}"
+        payload = {"action": action, "params": params or {}, "echo": echo}
+        fut = asyncio.get_running_loop().create_future()
+        self._pending[echo] = fut
+        try:
+            await self.websocket.send(json.dumps(payload))
+            response = await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            self.Logger.error(f"API {action} 响应超时（{timeout}s）")
+            return False, None, f"API {action} 响应超时"
+        except Exception as e:
+            self.Logger.error(f"API {action} 调用失败: {e}")
+            return False, None, str(e)
+        finally:
+            self._pending.pop(echo, None)
+
+        if response.get("status") == "ok":
+            return True, response.get("data"), ""
+        return False, None, response.get("message", "未知错误")
+
+    def dispatch_response(self, echo: str, data: dict) -> None:
+        """由消息接收层调用：把带 echo 的响应投递给等待中的 _call"""
+        fut = self._pending.get(echo)
+        if fut is not None and not fut.done():
+            fut.set_result(data)
+
+    async def call_api(self, action: str, params: dict = None) -> dict:
+        """通用 API 调用（供上层直接使用）：返回响应 data（失败返回空 dict 并记日志）"""
+        ok, data, msg = await self._call(action, params)
+        if not ok:
+            self.Logger.error(f"API {action} 失败: {msg}")
+            return {}
+        return data or {}
     async def send_message(self,user_id:str,message:str): #发送私聊消息
         """
         发送私聊消息
@@ -190,54 +235,58 @@ class QQAPI_list:
         获取群列表
         返回群组ID列表
         """
-        try:
-            json_message = {
-                "action": "get_group_list",
-                "params": {
-                        "no_cache": no_cache
-                        }
-                    }
-            await self.websocket.send(json.dumps(json_message))
-            
-            # 等待并处理响应
-            response = await self.websocket.recv()
-            data = json.loads(response)
-            
-            if data.get("status") == "ok":
-                groups = data.get("data", [])
-                return [str(g["group_id"]) for g in groups]
-                
-            self.Logger.error(f"获取群列表失败: {data.get('message', '未知错误')}")
+        ok, data, msg = await self._call("get_group_list", {"no_cache": no_cache})
+        if not ok:
+            self.Logger.error(f"获取群列表失败: {msg}")
             return []
-        except Exception as e:
-            self.Logger.error(f"获取群列表失败: {e}")
-            return []
+        return [str(g["group_id"]) for g in (data or [])]
+
     async def get_group_member_list(self, group_id: str) -> list:
         """
         获取群成员列表（OneBot get_group_member_list）
         成员 dict 含 role 字段: owner=群主, admin=管理员, member=成员
         """
-        try:
-            json_message = {
-                "action": "get_group_member_list",
-                "params": {
-                    "group_id": str(group_id)
-                }
-            }
-            await self.websocket.send(json.dumps(json_message))
-
-            # 等待并处理响应
-            response = await self.websocket.recv()
-            data = json.loads(response)
-
-            if data.get("status") == "ok":
-                return data.get("data", [])
-
-            self.Logger.error(f"获取群成员列表失败: {data.get('message', '未知错误')}")
+        ok, data, msg = await self._call("get_group_member_list", {"group_id": str(group_id)})
+        if not ok:
+            self.Logger.error(f"获取群成员列表失败: {msg}")
             return []
-        except Exception as e:
-            self.Logger.error(f"获取群成员列表失败: {e}")
-            return []
+        return data or []
+
+    async def get_group_member_info(self, group_id: str, user_id: str, no_cache: bool = False) -> dict:
+        """
+        获取群成员信息（含 role: owner/admin/member、card 群名片、nickname）
+        """
+        ok, data, msg = await self._call(
+            "get_group_member_info",
+            {"group_id": str(group_id), "user_id": str(user_id), "no_cache": no_cache},
+        )
+        if not ok:
+            self.Logger.error(f"获取群成员信息失败: {msg}")
+            return {}
+        return data or {}
+
+    async def get_group_info(self, group_id: str, no_cache: bool = False) -> dict:
+        """获取群信息"""
+        ok, data, msg = await self._call("get_group_info", {"group_id": str(group_id), "no_cache": no_cache})
+        if not ok:
+            self.Logger.error(f"获取群信息失败: {msg}")
+            return {}
+        return data or {}
+
+    async def set_group_kick_member(self, group_id: str, user_id: str, reject_add_request: bool = False) -> bool:
+        """
+        踢出群成员（OneBot set_group_kick_member）
+        :param reject_add_request: 是否拒绝该用户再次入群
+        """
+        ok, _, msg = await self._call(
+            "set_group_kick_member",
+            {"group_id": str(group_id), "user_id": str(user_id), "reject_add_request": reject_add_request},
+        )
+        if ok:
+            self.Logger.info(f"已踢出成员 群:{group_id} 用户:{user_id}")
+        else:
+            self.Logger.error(f"踢出成员失败 群:{group_id} 用户:{user_id}: {msg}")
+        return ok
     async def set_group_leave(self, group_id: str, is_dismiss: bool = True):
         """
         退出群聊
