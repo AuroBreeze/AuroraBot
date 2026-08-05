@@ -162,7 +162,7 @@ def test_help_filter_and_group():
     try:
         text = r.help_text("g1", "admin", "")
         check("管理员看到所有命令", all(x in text for x in ("/admin_cmd", "/user_cmd", "/open")))
-        check("按 app 分组", "🔹 权限系统" in text and "🔹 定时喊话" in text)
+        check("按 app 分组", "权限系统" in text and "定时喊话" in text)
         check("显示权限级别", "系统管理员" in text)
     finally:
         registry_mod.permission_service = old_perm

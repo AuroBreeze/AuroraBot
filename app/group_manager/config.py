@@ -58,13 +58,13 @@ DEFAULTS = {
     "inactive_kick_days": 7,        # 不活跃阈值（天）
     "inactive_remind_days": 1,      # 踢前提醒（剩余天数）
     "inactive_kick_interval": 3600, # 不活跃扫描间隔（秒）
-    "inactive_remind_msg": "⚠️ 您已超过 {days} 天未发言，{left} 天后将被移出群聊，请尽快发言报到！",
+    "inactive_remind_msg": "您已超过 {days} 天未发言，{left} 天后将被移出群聊，请尽快发言报到！",
     "welcome_msg": "欢迎加入本群！\n请阅读群规：\n{rules}\n{link}\n\n{question}",
     "rules_msg": "入群 {minutes} 分钟内发言即可避免被移出群聊，请尽快发言报到。",
     "link": "",
     "tier_question": "（选填）回复此条消息可登记您的游戏段位及游玩时间，方便群管理，如：王者",
-    "tier_confirm": "✅ 已登记您的段位：{tier}",
-    "tier_denied": "⚠️ 段位登记失败，请稍后重试。",
+    "tier_confirm": "已登记您的段位：{tier}",
+    "tier_denied": "段位登记失败，请稍后重试。",
 }
 
 _config = dict(DEFAULTS)
@@ -138,18 +138,18 @@ def set(key: str, value) -> tuple:
     if not _persist(cfg):
         return False, f"配置写回失败，修改未生效（内存中已更新 {key}={converted}）"
     Logger("group_manager_config").info(f"配置已更新 {key} = {converted}")
-    return True, f"✅ 已设置 {key} = {converted}"
+    return True, f"已设置 {key} = {converted}"
 
 
 def dump() -> str:
     """格式化输出当前配置（含描述）"""
     cfg = get()
-    lines = ["📋 群管配置"]
+    lines = ["群管配置"]
     for key, spec in CONFIG_KEYS.items():
         val = cfg.get(key, spec["type"]())
         shown = str(val).replace("\n", "\\n")
         lines.append(f"  {key} = {shown}\n      （{spec['desc']}）")
-    lines.append("💡 修改：/gm_config set <键> <值>（文本含换行请用 \\n）")
+    lines.append("修改：/gm_config set <键> <值>（文本含换行请用 \\n）")
     return "\n".join(lines)
 
 

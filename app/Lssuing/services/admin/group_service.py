@@ -187,12 +187,12 @@ class GroupService:
             # 生成结果消息
             result_msg = []
             if kicked_groups:
-                result_msg.append(f"⚠️ 已踢出过期群组: {', '.join(kicked_groups)}")
+                result_msg.append(f"已踢出过期群组: {', '.join(kicked_groups)}")
             if warning_groups:
-                result_msg.append(f"⚠️ 即将过期群组(3天内): {', '.join(warning_groups)}")
+                result_msg.append(f"即将过期群组(3天内): {', '.join(warning_groups)}")
 
             if normal_groups:
-                result_msg.append("✅ 正常授权群组:")
+                result_msg.append("正常授权群组:")
                 result_msg.append("\n".join([f"  - {group}" for group in normal_groups]))
             elif not kicked_groups and not warning_groups:
                 result_msg.append("当前无任何授权群组")

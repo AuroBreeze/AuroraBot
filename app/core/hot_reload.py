@@ -4,8 +4,8 @@
 目标：修改 app 业务代码（services / commands）后无需重启进程即生效。
 
 范围边界：
-- ✅ 热更新：已注册 app 的业务模块（如 app.Lssuing 的 services + commands）
-- ❌ 不重载：核心层（app/core/commands、app/permission）、连接层（api/、main.py）
+-热更新：已注册 app 的业务模块（如 app.Lssuing 的 services + commands）
+-不重载：核心层（app/core/commands、app/permission）、连接层（api/、main.py）
   —— 保证注册中心/权限门面/数据库连接稳定；改动这些仍需重启
 
 原理：
@@ -96,7 +96,7 @@ class HotReloader:
                     bad.append(f"{mod}: {e}")
             if bad:
                 self.logger.error(f"app [{app_name}] 语法检查失败，中止重载:\n" + "\n".join(bad))
-                return f"❌ app [{app_name}] 语法错误，未重载:\n" + "\n".join(bad)
+                return f"app [{app_name}] 语法错误，未重载:\n" + "\n".join(bad)
 
             # 2. 快照旧命令 → 移除旧命令（含别名）→ 按依赖序重载
             snapshot = registry.snapshot(app_name)
@@ -111,14 +111,14 @@ class HotReloader:
             # 4. 审计确认
             self.logger.info(f"app [{app_name}] 重载完成: {report[0]}")
             registry.summary()
-            return f"✅ app [{app_name}] 重载成功（{report[0]}，新命令已注册）"
+            return f"app [{app_name}] 重载成功（{report[0]}，新命令已注册）"
         except Exception as e:
             # 事务式回滚：重载失败时恢复旧命令，避免命令丢失
             snapshot = locals().get("snapshot", [])
             self.logger.error(f"app [{app_name}] 重载失败，回滚旧命令: {e}")
             registry.restore(app_name, snapshot)
             registry.summary()
-            return f"❌ app [{app_name}] 重载失败已回滚: {e}（旧命令已恢复，请检查日志）"
+            return f"app [{app_name}] 重载失败已回滚: {e}（旧命令已恢复，请检查日志）"
         finally:
             self._reloading.discard(app_name)
 

@@ -96,7 +96,7 @@ async def _sync_active_handler(websocket, message) -> tuple[bool, str]:
     parts = str(message.get("raw_message", "")).split()
     if len(parts) > 1 and parts[1].isdigit():
         updated, total = await group_manager_service.sync_group_members_active(parts[1])
-        return True, f"✅ 群 {parts[1]} 刷新完成：更新 {updated}/{total}"
+        return True, f"群 {parts[1]} 刷新完成：更新 {updated}/{total}"
     return True, await group_manager_service.sync_all_groups_active(force=True)
 
 

@@ -172,20 +172,20 @@ class CommandRegistry:
         for app, n in sorted(a["apps"].items()):
             lines.append(f"  [{app}] {n} 条")
         if a["conflicts"]:
-            lines.append(f"⚠️ 注册被拒 {len(a['conflicts'])} 条冲突:")
+            lines.append(f"注册被拒 {len(a['conflicts'])} 条冲突:")
             for c in a["conflicts"]:
                 lines.append(f"  [{c['app']}] {c['name']}: {c['reason']}")
         else:
-            lines.append("✅ 无注册冲突")
+            lines.append("无注册冲突")
         if a["prefix_conflicts"]:
             cross = [p for p in a["prefix_conflicts"] if p[2]]
             same = [p for p in a["prefix_conflicts"] if not p[2]]
             if cross:
-                lines.append(f"⚠️ 跨 app 前缀冲突 {len(cross)} 组（易混淆，建议改名）:")
+                lines.append(f"跨 app 前缀冲突 {len(cross)} 组（易混淆，建议改名）:")
                 for ka, kb, _ in cross:
                     lines.append(f"  '{ka}' 与 '{kb}'")
             if same:
-                lines.append(f"ℹ️ 同 app 前缀重叠 {len(same)} 组（通常为关联命令，仅供参考）:")
+                lines.append(f"ℹ同 app 前缀重叠 {len(same)} 组（通常为关联命令，仅供参考）:")
                 for ka, kb, _ in same:
                     lines.append(f"  '{ka}' 与 '{kb}'")
         return "\n".join(lines)
@@ -227,14 +227,14 @@ class CommandRegistry:
             if not permission_service.check_user_permission(group_id, user_id, cmd.required_level):
                 need = LEVEL_NAMES.get(cmd.required_level, str(cmd.required_level))
                 await self._reply(websocket, group_id,
-                                  f"⚠️ 权限不足：命令 {cmd.name} 需要『{need}』权限")
+                                  f"权限不足：命令 {cmd.name} 需要『{need}』权限")
                 return True
 
         try:
             judge, reply = await cmd.handler(websocket, message)
         except Exception as e:
             self.logger.error(f"命令 {cmd.name} 执行异常: {e}", exc_info=True)
-            await self._reply(websocket, group_id, f"❌ 命令 {cmd.name} 执行出错，请查看日志")
+            await self._reply(websocket, group_id, f"命令 {cmd.name} 执行出错，请查看日志")
             return True
 
         if reply:
@@ -252,7 +252,7 @@ class CommandRegistry:
         if target:
             return self._help_detail(group_id, user_id, target)
 
-        lines = ["📋 命令菜单\n"]
+        lines = ["命令菜单\n"]
         grouped: dict[str, list[Command]] = {}
         for cmd in self._commands.values():
             if cmd.name == "/help":
@@ -262,7 +262,7 @@ class CommandRegistry:
             grouped.setdefault(cmd.app_name or "其他", []).append(cmd)
 
         for app_name, cmds in grouped.items():
-            lines.append(f"🔹 {app_name}")
+            lines.append(f"{app_name}")
             # 组内排序：权限级别（1=管理员最高）→ 命令名
             for cmd in sorted(cmds, key=lambda c: (c.required_level, c.name)):
                 lines.append(self._format_cmd_line(cmd))
@@ -270,7 +270,7 @@ class CommandRegistry:
 
         if len(lines) == 1:
             lines.append("暂无可用命令，请联系管理员开通权限")
-        lines.append("💡 输入 /help <命令名> 查看命令详情")
+        lines.append("输入 /help <命令名> 查看命令详情")
         return "\n".join(lines)
 
     def _help_detail(self, group_id, user_id, target: str) -> str:
@@ -284,17 +284,17 @@ class CommandRegistry:
 
         lines = [
             f"📌 {cmd.name}" + (f"（别名: {' / '.join(cmd.aliases)}）" if cmd.aliases else ""),
-            f"📝 {cmd.description}",
-            f"🔑 需要权限: {LEVEL_NAMES.get(cmd.required_level, cmd.required_level)}",
+            f"{cmd.description}",
+            f"需要权限: {LEVEL_NAMES.get(cmd.required_level, cmd.required_level)}",
         ]
         if cmd.usage:
-            lines.append(f"🔧 用法: {cmd.usage}")
+            lines.append(f"用法: {cmd.usage}")
         if cmd.detail:
-            lines.append("📖 详细说明:")
+            lines.append("详细说明:")
             for ln in cmd.detail.splitlines():
                 lines.append(f"   {ln}")
         if cmd.example:
-            lines.append("🧪 示例:")
+            lines.append("示例:")
             for ln in cmd.example.splitlines():
                 lines.append(f"   {ln}")
         if cmd.sub_commands:

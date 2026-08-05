@@ -56,4 +56,4 @@ if __name__ == '__main__':
         asyncio.run(main())
     except KeyboardInterrupt:
         # Ctrl+C：asyncio.run 已取消全部任务并清理，这里仅提示
-        print("\n👋 已退出")
+        print("\n已退出")

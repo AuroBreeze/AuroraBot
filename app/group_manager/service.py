@@ -139,7 +139,7 @@ class GroupManagerService:
                 {"type": "at", "data": {"qq": owner}},
                 {"type": "at", "data": {"qq": user_id}},
                 {"type": "text", "data": {
-                    "text": f" ⚠️ 新人入群 {minutes} 分钟未发言，是否移出？\n"
+                    "text": f"新人入群 {minutes} 分钟未发言，是否移出？\n"
                             f"同意：回复此消息 1\n拒绝：回复此消息 0",
                 }},
             ])
@@ -191,7 +191,7 @@ class GroupManagerService:
         at_segs = [{"type": "at", "data": {"qq": m}} for m in targets]
         at_segs.append({"type": "at", "data": {"qq": user_id}})  # @ 新人指明对象
         at_segs.append({"type": "text", "data": {
-            "text": f" ⚠️ 群主暂未处理，新人入群 {minutes} 分钟未发言，是否移出？\n"
+            "text": f"群主暂未处理，新人入群 {minutes} 分钟未发言，是否移出？\n"
                     f"同意：回复此消息 1\n拒绝：回复此消息 0",
         }})
         msg_id = await api.send_group_message_array(group_id, at_segs)
@@ -385,7 +385,7 @@ class GroupManagerService:
         """
         api = get_api()
         if api is None:
-            return "⚠️ API 不可用，无法补记录"
+            return "API 不可用，无法补记录"
         from app.core.permission import permission_service
 
         lines = []
@@ -397,7 +397,7 @@ class GroupManagerService:
             added, total = await self.backfill_group(group_id)
             total_added += added
             lines.append(f"群 {group_id}: 补记录 {added}/{total}")
-        lines.insert(0, f"✅ 存量成员补记录完成，共新增 {total_added} 条")
+        lines.insert(0, f"存量成员补记录完成，共新增 {total_added} 条")
         return "\n".join(lines)
 
     async def auto_backfill_pending(self) -> None:
@@ -473,7 +473,7 @@ class GroupManagerService:
             self.logger.info(f"活跃同步 群:{group_id} 更新:{updated}/{total}")
         if not lines:
             return "没有已授权群可同步（先 /sub_group 授权）"
-        return "✅ 活跃同步完成（last_sent_time/nickname 已刷新）\n" + "\n".join(lines)
+        return "活跃同步完成（last_sent_time/nickname 已刷新）\n" + "\n".join(lines)
 
     # ---------- 批量成员信息 ----------
 
@@ -503,7 +503,7 @@ class GroupManagerService:
 
         start = (page - 1) * page_size
         rows = members[start:start + page_size]
-        lines = [f"📋 群成员档案（本群 {total} 人，第 {page}/{total_pages} 页）"]
+        lines = [f"群成员档案（本群 {total} 人，第 {page}/{total_pages} 页）"]
         for i, m in enumerate(rows, start=start + 1):
             extras = m["extras"]
             tier = extras.get("tier") or "-"
@@ -516,7 +516,7 @@ class GroupManagerService:
             )
         if total_pages > 1:
             nxt = page + 1 if page < total_pages else 1
-            lines.append(f"💡 /members {nxt} 查看下一页")
+            lines.append(f"/members {nxt} 查看下一页")
         return "\n".join(lines)
 
     # ---------- 不活跃自动踢人 ----------
@@ -619,15 +619,15 @@ class GroupManagerService:
             pages = max(1, -(-total // page_size))
             page = max(1, min(page, pages))
             shown = rows[(page - 1) * page_size: page * page_size]
-            head = f"📋 本群不活跃成员（≥{days} 天，共 {total} 人，第 {page}/{pages} 页）"
+            head = f"本群不活跃成员（≥{days} 天，共 {total} 人，第 {page}/{pages} 页）"
             start_idx = (page - 1) * page_size + 1
         else:
             # 未指定页码 → 全部列出
             shown = rows
-            head = f"📋 本群不活跃成员（≥{days} 天，共 {total} 人）"
+            head = f"本群不活跃成员（≥{days} 天，共 {total} 人）"
             start_idx = 1
-        head = (f"📋 本群不活跃成员（≥{days} 天，共 {total} 人，第 {page}/{pages} 页）" if page and page > 0
-                else f"📋 本群不活跃成员（≥{days} 天，共 {total} 人）")
+        head = (f"本群不活跃成员（≥{days} 天，共 {total} 人，第 {page}/{pages} 页）" if page and page > 0
+                else f"本群不活跃成员（≥{days} 天，共 {total} 人）")
         # 消息段数组：每行 = 序号文本 + @成员(at段) + 天数文本（与其他 at 消息实现一致）
         segs = [{"type": "text", "data": {"text": head + "\n"}}]
         for idx, (uid, inactive) in enumerate(shown, start_idx):
@@ -636,9 +636,9 @@ class GroupManagerService:
             segs.append({"type": "text", "data": {"text": f" 未活跃 {inactive} 天\n"}})
         if total:
             segs.append({"type": "text", "data": {
-                "text": "💡 /kick 批量移出：/kick 1 3 @用户 QQ号（数字=本列表序号）"}})
+                "text": "/kick 批量移出：/kick 1 3 @用户 QQ号（数字=本列表序号）"}})
         else:
-            segs.append({"type": "text", "data": {"text": "✅ 没有不活跃成员"}})
+            segs.append({"type": "text", "data": {"text": "没有不活跃成员"}})
         return segs
 
     async def kick_members(self, group_id: str, operator_id: str, raw: str) -> str:
@@ -685,11 +685,11 @@ class GroupManagerService:
 
         if not ok_list and not skip:
             return "未识别到有效目标"
-        text = f"✅ 已移出 {len(ok_list)} 人" + (
+        text = f"已移出 {len(ok_list)} 人" + (
             "：" + " ".join(f"[CQ:at,qq={u}]" for u in ok_list) if ok_list else ""
         )
         if skip:
-            text += f"\n⏭️ 跳过 {len(skip)} 人：" + "、".join(skip[:8]) + ("…" if len(skip) > 8 else "")
+            text += f"\n跳过 {len(skip)} 人：" + "、".join(skip[:8]) + ("…" if len(skip) > 8 else "")
         return text
 
     # ---------- 工具 ----------
