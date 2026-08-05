@@ -1,10 +1,14 @@
 """
 命令注册中心回归测试（临时脚本，使用独立 registry 与权限 stub，不污染全局状态）
 
-运行: uv run python test_commands.py
+运行: uv run python test/test_commands.py
 """
 import asyncio
+import os
 import sys
+
+# 确保从项目根可导入 app.*（脚本位于 test/ 子目录）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.commands.model import Command
 from app.core.commands.registry import CommandRegistry

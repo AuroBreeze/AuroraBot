@@ -1,7 +1,7 @@
 """
 业务层热更新回归测试（临时脚本，使用临时模块模拟 app 热更新，测试结束清理）
 
-运行: uv run python test_hot_reload.py
+运行: uv run python test/test_hot_reload.py
 """
 import asyncio
 import importlib
@@ -10,6 +10,9 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
+
+# 确保从项目根可导入 app.*（脚本位于 test/ 子目录）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import app.core.hot_reload as hr_mod
 from app.core.commands import registry

@@ -1,12 +1,15 @@
 """
 权限底座核心逻辑回归测试（临时脚本，独立数据库，不污染生产数据）
 
-运行: uv run python test_permission_core.py
+运行: uv run python test/test_permission_core.py
 """
 import asyncio
 import os
 import sys
 import tempfile
+
+# 确保从项目根可导入 app.*（脚本位于 test/ 子目录）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.permission.constants import LEVEL_OWNER, LEVEL_ADMIN
 from app.permission.store import PermissionStore
