@@ -61,6 +61,10 @@ class Websocket_receiver:
                     except (json.JSONDecodeError, TypeError):
                         self.logger.error(f"无法解析的 WS 消息: {message}")
                         continue
+                    # 记录 bot 自身 QQ（业务层用于避免误踢自己等）
+                    if data.get("self_id"):
+                        from app.core.runtime import set_self_id
+                        set_self_id(data["self_id"])
                     if not self._route_message(data):
                         # 事件处理后台化：读取循环必须保持快速 recv，
                         # 否则事件处理中调 API 等响应会与 recv 自锁（响应永远读不到）

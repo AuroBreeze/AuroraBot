@@ -453,6 +453,40 @@ def test_members_list():
         group_manager_service.store = old_store
 
 
+def test_never_kick_self():
+    print("\n[11] 不踢机器人自己：入群引导跳过 + 观察期不踢")
+    from app.core.tasks import task_scheduler
+    svc, store = make_svc()
+    api = FakeAPI()
+    runtime.set_api(api)
+    runtime.set_self_id("BOT01")
+
+    try:
+        # bot 自己入群：不引导（无欢迎消息/无观察期/不记录状态机）
+        class Ev:
+            group_id = "g1"
+            user_id = "BOT01"
+            raw_message = None
+            data = {"group_id": "g1", "user_id": "BOT01"}
+        asyncio.run(svc.on_member_join(Ev()))
+        check("bot 入群不发送欢迎", api.messages == [], str(api.messages))
+        check("bot 入群无观察期任务", all(not t.startswith("observe_") for t in task_scheduler.active()), str(task_scheduler.active()))
+        check("bot 入群无段位询问状态", store.get_extras("g1", "BOT01") == {})
+
+        # 观察期检查到 bot：不踢
+        store.record_join("g1", "BOT01")  # 即使有记录
+        asyncio.run(svc._check_observation("g1", "BOT01"))
+        check("观察期不踢 bot", api.kicked == [], str(api.kicked))
+
+        # 普通成员仍正常踢
+        store.record_join("g1", "uHuman")
+        asyncio.run(svc._check_observation("g1", "uHuman"))
+        check("普通成员仍会被踢", ("g1", "uHuman") in api.kicked, str(api.kicked))
+    finally:
+        runtime.set_self_id("")
+        runtime.set_api(None)
+
+
 if __name__ == "__main__":
     test_config_defaults()
     test_member_join_flow()
@@ -464,5 +498,6 @@ if __name__ == "__main__":
     test_backfill()
     test_auto_backfill_pending()
     test_members_list()
+    test_never_kick_self()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)

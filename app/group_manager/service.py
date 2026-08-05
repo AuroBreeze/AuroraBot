@@ -16,7 +16,7 @@ from api.Logger_owner import Logger
 from config.env import TIMEZONE
 from app.core import member_store
 from app.core.tasks import task_scheduler
-from app.core.runtime import get_api
+from app.core.runtime import get_api, get_self_id
 from . import config as gm_config
 
 
@@ -44,6 +44,10 @@ class GroupManagerService:
         group_id = str(event.group_id)
         user_id = event.user_id
         if not group_id or not user_id:
+            return
+        # 机器人自己入群：不引导、不观察期（避免 bot 被自己踢出）
+        if user_id == get_self_id():
+            self.logger.info(f"机器人自身入群 群:{group_id}，跳过引导流程")
             return
 
         self.store.record_join(group_id, user_id)
@@ -81,6 +85,10 @@ class GroupManagerService:
         api = get_api()
         if api is None:
             self.logger.warning("观察期检查：API 不可用，跳过")
+            return
+        # 绝不踢机器人自己（防御，双保险）
+        if user_id == get_self_id():
+            self.logger.info(f"跳过机器人自身 群:{group_id}，不踢出")
             return
         member = self.store.get_member(group_id, user_id)
         if member is None:
