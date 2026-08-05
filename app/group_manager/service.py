@@ -626,14 +626,20 @@ class GroupManagerService:
             shown = rows
             head = f"📋 本群不活跃成员（≥{days} 天，共 {total} 人）"
             start_idx = 1
-        lines = [head]
+        head = (f"📋 本群不活跃成员（≥{days} 天，共 {total} 人，第 {page}/{pages} 页）" if page and page > 0
+                else f"📋 本群不活跃成员（≥{days} 天，共 {total} 人）")
+        # 消息段数组：每行 = 序号文本 + @成员(at段) + 天数文本（与其他 at 消息实现一致）
+        segs = [{"type": "text", "data": {"text": head + "\n"}}]
         for idx, (uid, inactive) in enumerate(shown, start_idx):
-            lines.append(f"{idx}. [CQ:at,qq={uid}]  未活跃 {inactive} 天")
+            segs.append({"type": "text", "data": {"text": f"{idx}. "}})
+            segs.append({"type": "at", "data": {"qq": uid}})
+            segs.append({"type": "text", "data": {"text": f" 未活跃 {inactive} 天\n"}})
         if total:
-            lines.append("💡 /kick 批量移出：/kick 1 3 @用户 QQ号（数字=本列表序号）")
+            segs.append({"type": "text", "data": {
+                "text": "💡 /kick 批量移出：/kick 1 3 @用户 QQ号（数字=本列表序号）"}})
         else:
-            lines.append("✅ 没有不活跃成员")
-        return "\n".join(lines)
+            segs.append({"type": "text", "data": {"text": "✅ 没有不活跃成员"}})
+        return segs
 
     async def kick_members(self, group_id: str, operator_id: str, raw: str) -> str:
         """批量踢人：@用户 / QQ号 / 上次 /inactive 列表序号（可混合、空格分隔）"""

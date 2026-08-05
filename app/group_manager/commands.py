@@ -67,6 +67,7 @@ async def _gm_config_handler(websocket, message) -> tuple[bool, str]:
 
 async def _inactive_handler(websocket, message) -> tuple[bool, str]:
     """/inactive [天数] [页码]：列出本群不活跃成员（@ + 未活跃天数，降序；默认全部列出，显式页码才分页）"""
+    from app.core.runtime import get_api
     group_id = str(message.get("group_id", ""))
     parts = str(message.get("raw_message", "")).split()
     days = gm_config.get_int("inactive_kick_days", 7)
@@ -75,7 +76,12 @@ async def _inactive_handler(websocket, message) -> tuple[bool, str]:
         days = int(parts[1])
     if len(parts) > 2 and parts[2].isdigit():
         page = int(parts[2])
-    return True, group_manager_service.list_inactive_members(group_id, days, page)
+    segs = group_manager_service.list_inactive_members(group_id, days, page)
+    api = get_api()
+    if api is None:
+        return True, "连接不可用，请稍后重试"
+    await api.send_group_message_array(group_id, segs)
+    return True, ""  # 已通过消息数组发送（@ 正常生效）
 
 
 async def _kick_handler(websocket, message) -> tuple[bool, str]:
@@ -86,7 +92,11 @@ async def _kick_handler(websocket, message) -> tuple[bool, str]:
 
 
 async def _sync_active_handler(websocket, message) -> tuple[bool, str]:
-    """/sync_active：手动强制刷新全部授权群成员活跃（last_sent_time/nickname）"""
+    """/sync_active [群号]：手动强制刷新活跃；指定群号只刷新该群，否则全部授权群"""
+    parts = str(message.get("raw_message", "")).split()
+    if len(parts) > 1 and parts[1].isdigit():
+        updated, total = await group_manager_service.sync_group_members_active(parts[1])
+        return True, f"✅ 群 {parts[1]} 刷新完成：更新 {updated}/{total}"
     return True, await group_manager_service.sync_all_groups_active(force=True)
 
 
@@ -177,11 +187,11 @@ def _register():
         name="/sync_active",
         aliases=["sync_active", "同步活跃"],
         handler=_sync_active_handler,
-        description="手动强制刷新全部授权群成员活跃（last_sent_time/nickname）",
-        usage="无参数",
-        detail="立即遍历全部已授权群成员，调 get_group_member_info 刷新\n"
-               "最后活跃时间与昵称（无视 active_sync_enabled 开关，不等周期任务）。",
-        example="/sync_active",
+        description="手动强制刷新授权群成员活跃（last_sent_time/nickname）",
+        usage="[群号，缺省全部授权群]",
+        detail="立即刷新成员最后活跃时间与昵称（无视 active_sync_enabled 开关）。\n"
+               "指定群号只刷新该群；无参数刷新全部授权群。",
+        example="/sync_active\n/sync_active 736038975",
         required_level=LEVEL_ADMIN, app_name=APP,
     ))
 

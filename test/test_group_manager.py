@@ -612,25 +612,31 @@ def test_inactive_list_and_kick():
     store.record_message("g1", "1002")  # 有活跃记录（今天）→ 0 天，应被过滤
 
     text = svc.list_inactive_members("g1", 7, 1)
-    check("列表标题含总数与分页", "共 3 人" in text and "第 1/1 页" in text, text)
-    check("降序：最不活跃在前", text.index("1004") < text.index("1001") < text.index("1005"), text)
-    check("每行 @ 成员", "[CQ:at,qq=1004]" in text and "[CQ:at,qq=1001]" in text, text)
-    check("显示未活跃天数", "未活跃 20 天" in text and "未活跃 15 天" in text, text)
-    check("今日活跃成员被过滤", "1002" not in text.splitlines()[1:] and "未活跃 0 天" not in text, text)
-    check("机器人自己不出现在列表", "9001" not in text, text)
+    head = text[0]["data"]["text"]
+    ats = [s["data"]["qq"] for s in text if s["type"] == "at"]
+    texts = "".join(s["data"]["text"] for s in text if s["type"] == "text")
+    check("列表标题含总数与分页", "共 3 人" in head and "第 1/1 页" in head, head)
+    check("降序：最不活跃在前", ats.index("1004") < ats.index("1001") < ats.index("1005"), ats)
+    check("每行用 @ 段（at）", "[CQ:at" not in texts and "1004" in ats and "1001" in ats, str(text))
+    check("显示未活跃天数", "未活跃 20 天" in texts and "未活跃 15 天" in texts, texts)
+    check("今日活跃成员被过滤", "1002" not in ats and "未活跃 0 天" not in texts, texts)
+    check("机器人自己不出现在列表", "9001" not in ats, ats)
 
     # 分页：再入 12 人（10 天前发言）→ 共 15 人 → 2 页
     for i in range(12):
         store.upsert_member("g1", f"70{i:02d}", join_time=fmt(now - timedelta(days=10)), last_active=fmt(now - timedelta(days=10)))
     # 未指定页码 → 全部列出
     text_all = svc.list_inactive_members("g1", 7)
-    check("默认全部列出：标题无页码", "第" not in text_all.splitlines()[0] and "共 15 人" in text_all.splitlines()[0], text_all.splitlines()[0])
-    check("默认全部列出：含全部成员", "1." in text_all and "15." in text_all, text_all)
+    head_all = text_all[0]["data"]["text"]
+    check("默认全部列出：标题无页码", "第" not in head_all and "共 15 人" in head_all, head_all)
+    all_ats = [s["data"]["qq"] for s in text_all if s["type"] == "at"]
+    check("默认全部列出：含全部成员", "7000" in all_ats and "7011" in all_ats, len(all_ats))
     text_p1 = svc.list_inactive_members("g1", 7, 1)
-    check("分页标题 第1/2页", "第 1/2 页" in text_p1, text_p1)
+    check("分页标题 第1/2页", "第 1/2 页" in text_p1[0]["data"]["text"], text_p1[0]["data"]["text"])
     text_p2 = svc.list_inactive_members("g1", 7, 2)
-    check("第2页有序号", "11." in text_p2, text_p2)
-    check("页码越界回退", "第 99/2 页" not in svc.list_inactive_members("g1", 7, 99), svc.list_inactive_members("g1", 7, 99))
+    check("第2页有序号", any("11. " in s["data"]["text"] for s in text_p2), str(text_p2))
+    check("页码越界回退", "第 99/2 页" not in svc.list_inactive_members("g1", 7, 99)[0]["data"]["text"],
+          svc.list_inactive_members("g1", 7, 99)[0]["data"]["text"])
 
     async def run_kick(raw):
         return await svc.kick_members("g1", "1001", raw)
