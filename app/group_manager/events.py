@@ -35,8 +35,11 @@ async def _on_message(event):
     user_id = event.user_id
     if not group_id or not user_id:
         return
-    # 活跃记录（高频，同步写库）
-    group_manager_service.record_active(group_id, user_id)
+    # 群主观察期回复（同意/拒绝移出）优先处理
+    await group_manager_service.handle_observe_reply(event)
+    # 活跃记录（高频，同步写库）顺带保存发言者昵称
+    sender = event.data.get("sender") or {}
+    group_manager_service.record_active(group_id, user_id, str(sender.get("nickname") or "") or None)
     # 段位回复状态机
     await group_manager_service.handle_tier_reply(event)
 

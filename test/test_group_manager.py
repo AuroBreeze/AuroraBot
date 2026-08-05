@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core import runtime
 from app.core.member_store import MemberStore
+from app.core.events import Event, EventType
 from app.group_manager.service import GroupManagerService
 from app.group_manager import config as gm_config
 
@@ -113,7 +114,8 @@ def test_member_join_flow():
 
 
 def test_observation_kick():
-    print("\n[3] 观察期：未发言踢出 / 已发言跳过")
+    print("\n[3] 观察期：未发言踢出（直踢模式）/ 已发言跳过")
+    gm_config._config["observe_ask_owner"] = False  # 直踢模式（询问流程见 [17]）
     svc, store = make_svc()
     api = FakeAPI()
     runtime.set_api(api)
@@ -717,6 +719,73 @@ def test_api_active_sync():
         perm_mod.permission_service = old
 
 
+def test_observe_ask_owner_and_nickname():
+    print("\n[17] 观察期询问群主 + 昵称存储")
+    gm_config._config["observe_ask_owner"] = True
+    from app.core.runtime import set_api, set_self_id
+
+    svc, store = make_svc()
+    api = FakeAPI()
+    api.member_roles = {"u1": "member", "OWNER": "owner"}
+    set_api(api)
+    set_self_id("BOTX")
+
+    # 观察期到期未发言 → 询问群主（@群主），不直接踢
+    store.record_join("g1", "u1")
+    asyncio.run(svc._check_observation("g1", "u1"))
+    check("未发言先询问群主而非踢出", ("g1", "u1") not in api.kicked, str(api.kicked))
+    asked = [m for m in api.messages if m[0] == "at" and "是否移出" in m[2]]
+    check("询问消息已发给群主", len(asked) == 1 and asked[0][3] == "OWNER", str(asked))
+    check("pending 状态已记录", store.get_extras("g1", "u1").get("observe_pending") == "asking")
+
+    # 重复检查不重复询问（今日已问）
+    asyncio.run(svc._check_observation("g1", "u1"))
+    asked = [m for m in api.messages if m[0] == "at" and "是否移出" in m[2]]
+    check("今日不重复询问", len(asked) == 1, len(asked))
+
+    # 非群主回复 → 忽略
+    asyncio.run(svc.handle_observe_reply(Event(
+        type=EventType.MESSAGE,
+        data={"message_type": "group", "group_id": "g1", "user_id": "u2", "raw_message": "同意移出 u1",
+              "sender": {"role": "member", "nickname": "路人"}},
+    )))
+    check("非群主回复被忽略", ("g1", "u1") not in api.kicked, str(api.kicked))
+
+    # 群主拒绝 → 不踢 + pending 清理
+    asyncio.run(svc.handle_observe_reply(Event(
+        type=EventType.MESSAGE,
+        data={"message_type": "group", "group_id": "g1", "user_id": "OWNER", "raw_message": "拒绝移出 u1",
+              "sender": {"role": "owner", "nickname": "群主"}},
+    )))
+    check("群主拒绝不踢", ("g1", "u1") not in api.kicked, str(api.kicked))
+    check("拒绝后 pending 清理", store.get_extras("g1", "u1").get("observe_pending") == "rejected")
+
+    # 群主同意 → 踢出
+    store.record_join("g1", "u3")
+    asyncio.run(svc._check_observation("g1", "u3"))
+    asyncio.run(svc.handle_observe_reply(Event(
+        type=EventType.MESSAGE,
+        data={"message_type": "group", "group_id": "g1", "user_id": "OWNER", "raw_message": "同意移出 u3",
+              "sender": {"role": "owner", "nickname": "群主"}},
+    )))
+    check("群主同意后踢出", ("g1", "u3") in api.kicked, str(api.kicked))
+
+    # 昵称存储：API 同步保存 nickname
+    from app.core import timeutil
+    now_ts = int(timeutil.bj_now().timestamp())
+    api.member_roles["1001"] = "member"
+    api.member_infos["1001"] = {"user_id": "1001", "nickname": "小明", "last_sent_time": now_ts}
+    asyncio.run(svc.sync_group_members_active("g1"))
+    check("API 同步保存昵称", store.get_member("g1", "1001")["nickname"] == "小明")
+
+    # 昵称存储：消息事件保存（record_active 透传）
+    svc.record_active("g1", "u1", "小红")
+    check("消息事件保存昵称", store.get_member("g1", "u1")["nickname"] == "小红")
+    # 无昵称不覆盖已有
+    svc.record_active("g1", "u1", None)
+    check("无昵称不覆盖", store.get_member("g1", "u1")["nickname"] == "小红")
+
+
 def test_gm_config_command():
     print("\n[14] 群管配置命令（/gm_config：查看/修改/持久化）")
     from app.group_manager.commands import _gm_config_handler
@@ -775,6 +844,7 @@ if __name__ == "__main__":
     test_inactive_kick()
     test_inactive_list_and_kick()
     test_api_active_sync()
+    test_observe_ask_owner_and_nickname()
     test_gm_config_command()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)

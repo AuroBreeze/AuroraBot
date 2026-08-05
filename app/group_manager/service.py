@@ -79,7 +79,7 @@ class GroupManagerService:
     # ---------- 观察期检查 ----------
 
     async def _check_observation(self, group_id: str, user_id: str) -> None:
-        """观察期到：未发言（last_active 为空）→ 踢出"""
+        """观察期到：未发言（last_active 为空）→ 默认询问真实群主，确认后才踢"""
         api = get_api()
         if api is None:
             self.logger.warning("观察期检查：API 不可用，跳过")
@@ -94,15 +94,84 @@ class GroupManagerService:
         if member["last_active"]:
             self.logger.info(f"成员 {user_id} 观察期内已发言，跳过踢出")
             return
+        # 未发言：开启"询问群主"时先征求真实群主确认（安全默认：不回复不踢）
+        if gm_config.get_bool("observe_ask_owner", True):
+            await self._ask_owner_before_kick(group_id, user_id)
+            return
         ok = await api.set_group_kick_member(group_id, user_id)
         self.logger.info(f"观察期未发言踢出 群:{group_id} 用户:{user_id} 结果:{ok}")
 
+    async def _ask_owner_before_kick(self, group_id: str, user_id: str) -> None:
+        """观察期到期未发言：询问真实群主（role=owner），确认后才踢。今日已问过则不重复。"""
+        api = get_api()
+        if api is None:
+            return
+        extras = self.store.get_extras(group_id, user_id)
+        today = timeutil.bj_now().strftime("%Y-%m-%d")
+        if extras.get("observe_pending") == "asking" and extras.get("observe_asked_date") == today:
+            return  # 今日已询问，等待群主回复
+        try:
+            members = await api.get_group_member_list(group_id)
+        except Exception:
+            self.logger.warning(f"观察期成员 {user_id} 未发言，查询群主失败，跳过（不踢）")
+            return
+        owner = next((str(m.get("user_id")) for m in members if m.get("role") == "owner"), None)
+        if not owner:
+            self.logger.warning(f"观察期成员 {user_id} 未发言但找不到群主，跳过（不踢）")
+            return
+        minutes = gm_config.get_int("observe_minutes", 10)
+        await api.send_at_group_message(
+            group_id, owner,
+            f"⚠️ 成员 {user_id} 入群 {minutes} 分钟未发言，是否移出？\n"
+            f"同意请回复：同意移出 {user_id}\n拒绝请回复：拒绝移出 {user_id}",
+        )
+        extras["observe_pending"] = "asking"
+        extras["observe_asked_date"] = today
+        self.store.set_extras(group_id, user_id, extras)
+        self.logger.info(f"观察期询问群主 群:{group_id} 成员:{user_id} 群主:{owner}")
+
+    async def handle_observe_reply(self, event) -> None:
+        """群主回复观察期询问：同意移出 / 拒绝移出（仅群主 role=owner 生效）"""
+        data = event.data
+        group_id = str(event.group_id or "")
+        if not group_id:
+            return
+        sender = data.get("sender") or {}
+        if sender.get("role") != "owner":
+            return  # 仅真实群主可确认
+        raw = str(data.get("raw_message") or "").strip()
+        agree = "同意移出" in raw
+        reject = "拒绝移出" in raw
+        if not agree and not reject:
+            return
+        # 本群待确认成员（observe_pending == asking）
+        pending = [m["user_id"] for m in self.store.get_members(group_id)
+                   if self.store.get_extras(group_id, m["user_id"]).get("observe_pending") == "asking"]
+        if not pending:
+            return
+        # 消息中指定的 QQ 号（限 pending 内）；未指定则全部
+        nums = re.findall(r"\d{5,}", raw)
+        targets = [n for n in nums if n in pending] or pending
+        api = get_api()
+        if api is None:
+            return
+        for uid in targets:
+            extras = self.store.get_extras(group_id, uid)
+            if agree:
+                ok = await api.set_group_kick_member(group_id, uid)
+                extras["observe_pending"] = "resolved"
+                self.logger.info(f"群主同意移出 群:{group_id} 成员:{uid} 结果:{ok}")
+            else:
+                extras["observe_pending"] = "rejected"
+                self.logger.info(f"群主拒绝移出 群:{group_id} 成员:{uid}（保留）")
+            self.store.set_extras(group_id, uid, extras)
+
     # ---------- 活跃记录 ----------
 
-    def record_active(self, group_id, user_id) -> None:
-        """更新最后发言时间（MESSAGE 事件高频调用）"""
+    def record_active(self, group_id, user_id, nickname: str | None = None) -> None:
+        """更新最后发言时间（MESSAGE 事件高频调用），顺带保存昵称"""
         if group_id and user_id:
-            self.store.record_message(group_id, user_id)
+            self.store.record_message(group_id, user_id, nickname)
 
     # ---------- 段位状态机 ----------
 
@@ -292,6 +361,7 @@ class GroupManagerService:
                 group_id, uid,
                 timeutil.format_local(join_dt) if join_dt else None,
                 timeutil.format_local(last_dt) if last_dt else None,
+                nickname=str(info.get("nickname") or "") or None,
             )
             updated += 1
         return updated, total

@@ -44,6 +44,7 @@ class MemberStore:
                 user_id    TEXT NOT NULL,
                 join_time  DATETIME,          -- 入群时间
                 last_active DATETIME,         -- 最后发言时间
+                nickname   TEXT,              -- 昵称（API 同步/消息事件保存）
                 extras     TEXT DEFAULT '{}', -- 扩展字段（JSON）
                 PRIMARY KEY (group_id, user_id)
             )
@@ -55,6 +56,10 @@ class MemberStore:
                 backfill_time  DATETIME
             )
             """)
+            # 存量库兼容：补 nickname 列（旧库无此列）
+            cols = [r[1] for r in self.conn.execute("PRAGMA table_info(group_members)").fetchall()]
+            if "nickname" not in cols:
+                self.conn.execute("ALTER TABLE group_members ADD COLUMN nickname TEXT")
             self.conn.commit()
         return self.conn
 
@@ -88,19 +93,20 @@ class MemberStore:
         return cursor.rowcount > 0
 
     def upsert_member(self, group_id, user_id, join_time: Optional[str] = None,
-                      last_active: Optional[str] = None) -> None:
+                      last_active: Optional[str] = None, nickname: Optional[str] = None) -> None:
         """
         API 活跃同步专用：新成员补记录，已有成员仅更新传入字段（不覆盖既有值/extras）。
-        join_time/last_active 为 None 时不覆盖已有值；新成员的 join_time 缺省用当前时间。
+        join_time/last_active/nickname 为 None 时不覆盖已有值；新成员的 join_time 缺省用当前时间。
         """
         conn = self._get_connection()
         conn.execute(
-            "INSERT INTO group_members (group_id, user_id, join_time, last_active, extras) "
-            "VALUES (?, ?, ?, ?, '{}') "
+            "INSERT INTO group_members (group_id, user_id, join_time, last_active, nickname, extras) "
+            "VALUES (?, ?, ?, ?, ?, '{}') "
             "ON CONFLICT(group_id, user_id) DO UPDATE SET "
             "  join_time = COALESCE(excluded.join_time, group_members.join_time), "
-            "  last_active = COALESCE(excluded.last_active, group_members.last_active)",
-            (str(group_id), str(user_id), join_time or self._now_str(), last_active),
+            "  last_active = COALESCE(excluded.last_active, group_members.last_active), "
+            "  nickname = COALESCE(excluded.nickname, group_members.nickname)",
+            (str(group_id), str(user_id), join_time or self._now_str(), last_active, nickname),
         )
         conn.commit()
 
@@ -123,17 +129,18 @@ class MemberStore:
         ).fetchone()
         return row is not None
 
-    def record_message(self, group_id, user_id) -> None:
+    def record_message(self, group_id, user_id, nickname: Optional[str] = None) -> None:
         """更新最后发言时间（仅更新已记录成员；未记录成员忽略）。
 
-        秒级去重：同一用户同一秒重复发言不重复写库/commit（减少高频写放大）。
+        秒级去重：同一用户同一秒重复发言不重复写库/commit（减少高频写放大）；
+        顺带保存发言者昵称（COALESCE，不覆盖已有昵称）。
         """
         now = self._now_str()
         conn = self._get_connection()
         cur = conn.execute(
-            "UPDATE group_members SET last_active = ? "
+            "UPDATE group_members SET last_active = ?, nickname = COALESCE(?, nickname) "
             "WHERE group_id = ? AND user_id = ? AND (last_active IS NULL OR last_active != ?)",
-            (now, str(group_id), str(user_id), now),
+            (now, nickname, str(group_id), str(user_id), now),
         )
         if cur.rowcount:  # 实际有变化才 commit
             conn.commit()
@@ -153,7 +160,7 @@ class MemberStore:
         """获取单个成员状态；不存在返回 None"""
         conn = self._get_connection()
         row = conn.execute(
-            "SELECT group_id, user_id, join_time, last_active, extras "
+            "SELECT group_id, user_id, join_time, last_active, nickname, extras "
             "FROM group_members WHERE group_id = ? AND user_id = ?",
             (str(group_id), str(user_id)),
         ).fetchone()
@@ -164,20 +171,21 @@ class MemberStore:
             "user_id": row[1],
             "join_time": row[2],
             "last_active": row[3],
-            "extras": json.loads(row[4] or "{}"),
+            "nickname": row[4],
+            "extras": json.loads(row[5] or "{}"),
         }
 
     def get_members(self, group_id) -> list[dict]:
         """获取群内全部成员状态（按入群时间正序）"""
         conn = self._get_connection()
         rows = conn.execute(
-            "SELECT group_id, user_id, join_time, last_active, extras "
+            "SELECT group_id, user_id, join_time, last_active, nickname, extras "
             "FROM group_members WHERE group_id = ? ORDER BY join_time",
             (str(group_id),),
         ).fetchall()
         return [{
             "group_id": r[0], "user_id": r[1], "join_time": r[2],
-            "last_active": r[3], "extras": json.loads(r[4] or "{}"),
+            "last_active": r[3], "nickname": r[4], "extras": json.loads(r[5] or "{}"),
         } for r in rows]
 
     # ---------- 扩展字段 ----------
