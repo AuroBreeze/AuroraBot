@@ -1,7 +1,6 @@
 import json
 import websockets
-from api.Logger_owner import Logger # 美化日志输出
-from api.Share_date import Raw_data # 导入原始数据队列（兼容保留）
+from api.Logger_owner import Logger  # 美化日志输出
 import asyncio
 from api.Botapi import QQAPI_list
 from api.Msg_dispatcher import Main_dispatcher_and_run
@@ -66,7 +65,6 @@ class Websocket_receiver:
                     raw = message if isinstance(message, str) else str(message)
                     # 日志截断：避免图片 base64 等长内容刷屏
                     self.logger.info("Message Received: %s" % (raw[:300] + ("…" if len(raw) > 300 else "")))
-                    await Raw_data.put(message)  # 兼容保留
                     try:
                         data = json.loads(message)
                     except (json.JSONDecodeError, TypeError):
