@@ -1,0 +1,35 @@
+[project]
+name = "AuroCC"
+version = "0.1.0"
+description = "AuroraBot 依赖与打包配置"
+requires-python = ">=3.10"
+dependencies = [
+    "websockets",
+    "colorlog",
+    "pyyaml",
+    "pytz",
+]
+
+[project.optional-dependencies]
+# 未挂载 app（Commodity_lssuing / Proxy_talk）所需的重依赖。
+# 默认不安装；启用这些 app 时执行: uv sync --extra full
+full = [
+    "requests",
+    "matplotlib",
+    "pandas",
+    "numpy",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["api*", "app*", "config*", "utils*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.db", "*.yml", "*.index", "*.pkl"]
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true

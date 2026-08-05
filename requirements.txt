@@ -1,8 +1,0 @@
-websockets
-colorlog
-setuptools
-pyyaml
-pytz
-requests
-matplotlib
-pandas
