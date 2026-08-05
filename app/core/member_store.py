@@ -48,6 +48,13 @@ class MemberStore:
                 PRIMARY KEY (group_id, user_id)
             )
             """)
+            # 批量补记录标记：已补过的群不再自动重复处理
+            self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS group_backfill (
+                group_id       TEXT PRIMARY KEY,
+                backfill_time  DATETIME
+            )
+            """)
             self.conn.commit()
         return self.conn
 
@@ -79,6 +86,25 @@ class MemberStore:
         )
         conn.commit()
         return cursor.rowcount > 0
+
+    # ---------- 批量补记录标记 ----------
+
+    def mark_backfilled(self, group_id) -> None:
+        """标记某群已完成批量补记录（幂等）"""
+        conn = self._get_connection()
+        conn.execute(
+            "INSERT OR REPLACE INTO group_backfill (group_id, backfill_time) VALUES (?, ?)",
+            (str(group_id), self._now_str()),
+        )
+        conn.commit()
+
+    def is_backfilled(self, group_id) -> bool:
+        """该群是否已执行过批量补记录"""
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT 1 FROM group_backfill WHERE group_id = ?", (str(group_id),)
+        ).fetchone()
+        return row is not None
 
     def record_message(self, group_id, user_id) -> None:
         """更新最后发言时间（仅更新已记录成员；未记录成员忽略）"""

@@ -347,6 +347,58 @@ def test_backfill():
         group_manager_service.store = old_store
 
 
+def test_auto_backfill_pending():
+    print("\n[9] 自动补记录：未处理群自动补一次，已处理群跳过")
+    svc, store = make_svc()
+
+    class FakeAPI3(FakeAPI):
+        def __init__(self):
+            super().__init__()
+            self.member_lists = {"gA": [{"user_id": "u1"}, {"user_id": "u2"}], "gB": [{"user_id": "u3"}]}
+            self.group_list_calls = 0
+            self.member_list_calls = []
+
+        async def get_group_list(self):
+            self.group_list_calls += 1
+            return list(self.member_lists.keys())
+
+        async def get_group_member_list(self, group_id):
+            self.member_list_calls.append(group_id)
+            return self.member_lists.get(group_id, [])
+
+    api3 = FakeAPI3()
+    runtime.set_api(api3)
+
+    # patch 权限：gA/gB 已授权
+    import app.permission as perm_mod
+    old_perm = perm_mod.permission_service
+    perm_mod.permission_service = type("Stub", (), {"check_group_authorized": staticmethod(lambda g: True)})()
+
+    # 单例 store 替换为测试库
+    from app.group_manager.service import group_manager_service
+    old_store = group_manager_service.store
+    group_manager_service.store = store
+    try:
+        # 第一次：两个未处理群都被补 + 标记
+        asyncio.run(svc.auto_backfill_pending())
+        check("未处理群全部补齐", store.get_member("gA", "u1") is not None and store.get_member("gB", "u3") is not None)
+        check("已标记", store.is_backfilled("gA") and store.is_backfilled("gB"))
+
+        # 第二次：已处理群跳过（不再拉取成员列表）
+        api3.member_list_calls.clear()
+        asyncio.run(svc.auto_backfill_pending())
+        check("已处理群跳过", api3.member_list_calls == [], str(api3.member_list_calls))
+    finally:
+        group_manager_service.store = old_store
+        perm_mod.permission_service = old_perm
+
+    # 手动 /backfill 也会标记
+    svc2, store2 = make_svc()
+    runtime.set_api(FakeAPI3())
+    asyncio.run(svc2.backfill_group("gX"))
+    check("手动 backfill 后标记", store2.is_backfilled("gX"))
+
+
 if __name__ == "__main__":
     test_config_defaults()
     test_member_join_flow()
@@ -356,5 +408,6 @@ if __name__ == "__main__":
     test_query_and_commands()
     test_event_bus_integration()
     test_backfill()
+    test_auto_backfill_pending()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)

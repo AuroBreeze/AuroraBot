@@ -16,6 +16,8 @@ DEFAULTS = {
     "observe_minutes": 10,          # 观察期（分钟）：入群后未发言踢出
     "auto_approve": True,           # 自动同意入群
     "auto_approve_scope": "authorized",  # authorized=仅已授权群; all=全部
+    "auto_backfill": True,          # 自动补记录：未处理过的群自动补一次
+    "auto_backfill_interval": 300,  # 自动补记录检查间隔（秒）
     "welcome_msg": "欢迎 {user} 加入本群！\n请阅读群规：\n{rules}\n{link}\n\n{question}",
     "rules_msg": "入群 {minutes} 分钟内未发言将被移出群聊，请尽快发言报到。",
     "link": "",

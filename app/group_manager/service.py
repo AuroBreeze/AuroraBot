@@ -188,7 +188,7 @@ class GroupManagerService:
     async def backfill_group(self, group_id) -> tuple[int, int]:
         """
         对单个群批量补记录：拉取真实群成员列表，补齐缺失的 MemberStore 记录。
-        已存在的记录（含 join_time/extras）不被覆盖。
+        已存在的记录（含 join_time/extras）不被覆盖；完成后标记该群已处理。
         :return: (新增数量, 群成员总数)
         """
         api = get_api()
@@ -200,6 +200,7 @@ class GroupManagerService:
             user_id = str(member.get("user_id") or "")
             if user_id and self.store.ensure_member(group_id, user_id):
                 added += 1
+        self.store.mark_backfilled(group_id)
         self.logger.info(f"存量成员补记录 群:{group_id} 新增:{added}/{len(members)}")
         return added, len(members)
 
@@ -224,6 +225,24 @@ class GroupManagerService:
             lines.append(f"群 {group_id}: 补记录 {added}/{total}")
         lines.insert(0, f"✅ 存量成员补记录完成，共新增 {total_added} 条")
         return "\n".join(lines)
+
+    async def auto_backfill_pending(self) -> None:
+        """
+        自动补记录（后台周期任务）：对未标记过的已授权群补一次记录。
+        幂等：已标记（处理过）的群跳过；未连接/无 API 时静默跳过。
+        """
+        api = get_api()
+        if api is None:
+            return
+        from app.permission import permission_service
+
+        for group_id in await api.get_group_list():
+            if not permission_service.check_group_authorized(group_id):
+                continue
+            if self.store.is_backfilled(group_id):
+                continue
+            added, total = await self.backfill_group(group_id)
+            self.logger.info(f"自动补记录 群:{group_id} 新增:{added}/{total}")
 
     # ---------- 工具 ----------
 
