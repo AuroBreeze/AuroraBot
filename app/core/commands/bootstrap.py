@@ -19,7 +19,7 @@ async def _help_handler(websocket, message):
 
 registry.register(Command(
     name="/help",
-    aliases=["help", "菜单", "喊话帮助", "喊话菜单"],
+    aliases=["help"],
     handler=_help_handler,
     description="查看命令菜单与帮助",
     usage="[命令名]",

@@ -19,9 +19,10 @@ def _register():
 
     APP = "权限系统"
 
+    # 命令名均为英文，且任意两命令首词不互为前缀（避免混淆告警）
     registry.register(Command(
-        name="/订阅群",
-        aliases=["订阅群", "sub_group"],
+        name="/sub_group",
+        aliases=["sub_group"],
         handler=partial(admin_group.authorize_group_simple),
         description="登记授权群组（简单版：now 起生效，功能 all）",
         usage="<目标群号> <天数> [获权用户，默认自己]",
@@ -29,33 +30,33 @@ def _register():
     ))
     registry.register(Command(
         name="/subscribe_group",
-        aliases=["subscribe_group"],
+        aliases=["subscribe"],
         handler=partial(admin_group.authorize_group),
         description="登记授权群组（完整版：可指定起止时间与功能）",
         usage="<目标群号>\nstarttime now\nendtime <天数>\nuser_id <获权用户>\nfeatures all",
         required_level=LEVEL_SYSTEM, app_name=APP,
     ))
     registry.register(Command(
-        name="/unsubscribe_group",
-        aliases=["unsubscribe_group"],
+        name="/unsub",
+        aliases=["unsub", "unsubscribe", "unsubscribe_group"],
         handler=partial(admin_group.remove_authorization),
         description="取消群组授权（级联删除该群权限）",
         usage="<目标群号>",
         required_level=LEVEL_SYSTEM, app_name=APP,
     ))
     registry.register(Command(
-        name="/check_group_list",
-        aliases=["check_group_list"],
+        name="/check_groups",
+        aliases=["check_groups", "check_group_list"],
         handler=partial(admin_group.check_group_list_and_kick),
         description="检查并踢出过期授权群",
         usage="",
         required_level=LEVEL_SYSTEM, app_name=APP,
     ))
     registry.register(Command(
-        name="/raise_user",
-        aliases=["raise_user"],
+        name="/grant",
+        aliases=["grant", "raise_user"],
         handler=partial(admin_user.raise_user_permission),
-        description="跨群提升用户权限（系统管理员）",
+        description="跨群设置用户权限（系统管理员）",
         usage="<目标群号> <目标用户> <级别2或3>",
         required_level=LEVEL_SYSTEM, app_name=APP,
     ))
@@ -68,32 +69,32 @@ def _register():
         required_level=LEVEL_SYSTEM, app_name=APP,
     ))
     registry.register(Command(
-        name="/list_user",
-        aliases=["list_user"],
+        name="/list_users",
+        aliases=["list_users", "list_user"],
         handler=partial(user_group.list_user_permissions),
         description="列出群组授权用户（仅本群或管理员）",
         usage="<目标群号>",
         required_level=LEVEL_ADMIN, app_name=APP,
     ))
     registry.register(Command(
-        name="/check_group",
-        aliases=["check_group"],
+        name="/group_info",
+        aliases=["group_info"],
         handler=partial(user_group.check_group_information),
         description="查看本群授权信息",
         usage="",
         required_level=LEVEL_ADMIN, app_name=APP,
     ))
     registry.register(Command(
-        name="/remove",
-        aliases=["remove"],
+        name="/revoke",
+        aliases=["revoke"],
         handler=partial(user_user.remove_user_permission),
         description="移除本群低一级用户的权限",
         usage="<目标用户>",
         required_level=LEVEL_OWNER, app_name=APP,
     ))
     registry.register(Command(
-        name="/raise",
-        aliases=["raise"],
+        name="/promote",
+        aliases=["promote"],
         handler=partial(user_user.raise_user_permission),
         description="将本群用户提升为群管理员",
         usage="<目标用户>",

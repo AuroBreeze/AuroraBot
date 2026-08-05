@@ -10,14 +10,14 @@ class UserService:
     async def raise_user_permission(self, message) -> tuple[bool, str]:
         """改变用户群组权限（跨群，仅系统管理员）"""
         msg = str(message.get("raw_message"))
-        if not msg.startswith("raise_user "):
+        parts = msg.split()
+        if not parts or parts[0] not in ("/grant", "grant", "raise_user"):
             self.logger.debug("无效的权限提高命令格式")
             return False, None
 
         user_id = str(message.get("user_id"))
-        parts = msg.split(" ")
         if len(parts) < 4:
-            return False, "格式: raise_user <target_group_id> <target_user> <level>"
+            return False, "格式: /grant <目标群号> <目标用户> <level>"
         target_group_id, target_user = parts[1], parts[2]
         try:
             level = int(parts[3])
@@ -29,14 +29,14 @@ class UserService:
     async def remove_user_permission(self, message) -> tuple[bool, str]:
         """取消用户权限（跨群，仅系统管理员）"""
         msg = str(message.get("raw_message"))
-        if not msg.startswith("remove_user "):
+        parts = msg.split()
+        if not parts or parts[0] not in ("/remove_user", "remove_user"):
             self.logger.debug("无效的移除权限命令格式")
             return False, None
 
         user_id = str(message.get("user_id"))
-        parts = msg.split(" ")
         if len(parts) < 3:
-            return False, "格式: remove_user <target_group_id> <target_user_id>"
+            return False, "格式: /remove_user <目标群号> <目标用户>"
         target_group_id, target_user_id = parts[1], parts[2]
 
         judge, msg_or_err = permission_service.remove_user_permission(user_id, target_group_id, target_user_id)

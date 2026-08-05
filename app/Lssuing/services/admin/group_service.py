@@ -12,21 +12,23 @@ class GroupService:
         self.bj_tz = pytz.timezone(TIMEZONE)
 
     async def authorize_group(self, message) -> tuple[bool, str]:
-        """处理群组授权"""
+        """处理群组授权（完整版，多行参数）"""
         msg = str(message.get("raw_message"))
-        if not msg.startswith("subscribe_group "):
+        parts = msg.split()
+        if not parts or parts[0] not in ("/subscribe_group", "subscribe_group", "subscribe"):
             self.logger.debug("无效的群组授权格式")
             return False, None
 
         user_id = str(message.get("user_id"))
 
-        # 解析授权数据
-        data = {}
-        for line in msg.split("\n"):
-            parts = line.strip().split(" ")
-            if len(parts) != 2:
+        # 解析授权数据：首行取目标群号，其余行按 key value 解析
+        target_group = parts[1] if len(parts) > 1 else ""
+        data = {"subscribe_group": target_group}
+        for line in msg.split("\n")[1:]:
+            line_parts = line.strip().split(" ")
+            if len(line_parts) != 2:
                 continue
-            data[parts[0]] = parts[1]
+            data[line_parts[0]] = line_parts[1]
 
         # 验证必要参数
         required_fields = ['subscribe_group', 'starttime', 'endtime', 'user_id', 'features']
@@ -50,16 +52,16 @@ class GroupService:
 
     async def authorize_group_simple(self, message) -> tuple[bool, str]:
         """
-        简单版群授权：/订阅群 <目标群号> <天数> [获权用户]
+        简单版群授权：/sub_group <目标群号> <天数> [获权用户]
         默认 starttime=now、features=all；获权用户缺省为命令执行者
         """
         msg = str(message.get("raw_message"))
         parts = msg.split()
-        if not parts or parts[0] not in ("/订阅群", "订阅群", "sub_group"):
+        if not parts or parts[0] not in ("/sub_group", "sub_group"):
             self.logger.debug("无效的简单版群授权命令格式")
             return False, None
         if len(parts) < 3:
-            return False, "格式: /订阅群 <目标群号> <天数> [获权用户]"
+            return False, "格式: /sub_group <目标群号> <天数> [获权用户]"
         target_group = parts[1]
         try:
             days = int(parts[2])
@@ -81,14 +83,14 @@ class GroupService:
     async def remove_authorization(self, message) -> tuple[bool, str]:
         """删除群组授权"""
         msg = str(message.get("raw_message"))
-        if not msg.startswith("unsubscribe_group "):
+        parts = msg.split()
+        if not parts or parts[0] not in ("/unsub", "unsub", "unsubscribe", "unsubscribe_group"):
             self.logger.debug("无效的取消授权命令格式")
             return False, None
 
         user_id = str(message.get("user_id"))
-        parts = msg.split(" ")
         if len(parts) < 2:
-            return False, "格式: unsubscribe_group <target_group_id>"
+            return False, "格式: /unsub <目标群号>"
         target_group = parts[1]
 
         return permission_service.unsubscribe_group(user_id, target_group)
@@ -99,7 +101,8 @@ class GroupService:
         """
         try:
             msg = str(message.get("raw_message"))
-            if msg != "check_group_list":
+            parts = msg.split()
+            if not parts or parts[0] not in ("/check_groups", "check_groups", "check_group_list"):
                 self.logger.debug(f"收到无效命令: {msg}")
                 return False, None
 

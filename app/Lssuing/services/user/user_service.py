@@ -12,15 +12,15 @@ class UserService:
         移除用户权限,仅能移除本群的低一级的其他人
         """
         msg = str(message.get("raw_message"))
-        if not msg.startswith("remove "):  # remove <target_user_id>
+        parts = msg.split()
+        if not parts or parts[0] not in ("/revoke", "revoke"):
             self.logger.debug("无效的移除用户权限命令格式")
             return False, None
 
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
-        parts = msg.split(" ")
         if len(parts) < 2:
-            return False, "格式: remove <target_user_id>"
+            return False, "格式: /revoke <目标用户>"
         target_user_id = parts[1]
 
         judge, msg_or_err = permission_service.remove_user_permission(user_id, group_id, target_user_id)
@@ -33,15 +33,15 @@ class UserService:
         提升用户权限,仅能提升本群的低一级的其他人
         """
         msg = str(message.get("raw_message"))
-        if not msg.startswith("raise "):  # raise <target_user_id>
+        parts = msg.split()
+        if not parts or parts[0] not in ("/promote", "promote"):
             self.logger.debug("无效的提升用户权限命令格式")
             return False, None
 
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
-        parts = msg.split(" ")
         if len(parts) < 2:
-            return False, "格式: raise <target_user_id>"
+            return False, "格式: /promote <目标用户>"
         target_user_id = parts[1]
 
         # 2 级用户在本群内将目标提升为 3 级；目标校验由权限门面完成

@@ -10,7 +10,7 @@ from app.permission import permission_service
 
 class TimedAnnouncement:
     """
-    定时喊话插件主类
+    /announce插件主类
     """
     def __init__(self, websocket, message: dict):
         self.logger = Logger("TimedAnnouncement")
@@ -34,12 +34,12 @@ class TimedAnnouncement:
         group_id = str(self.message.get("group_id"))
 
         # 权限检查与帮助菜单由命令注册中心统一处理；这里只分发喊话命令
-        if msg.startswith("定时喊话"):
+        if msg.startswith("/announce"):
             await self.handle_announcement_command(msg, user_id, group_id)
             
     async def handle_announcement_command(self, msg: str, user_id: str, group_id: str):
         """
-        处理定时喊话命令
+        处理/announce命令
         """
         parts = msg.split()
         
@@ -66,18 +66,18 @@ class TimedAnnouncement:
         elif command == "帮助":
             await self.show_help()
         else:
-            await self.send_message("❌ 未知命令，请输入'喊话帮助'查看使用说明")
+            await self.send_message("❌ 未知命令，请输入'/help'查看使用说明")
             
     async def add_announcement(self, parts: list, user_id: str, group_id: str):
         """
-        添加定时喊话任务
-        格式：定时喊话 添加 时间 消息 [星期] [atall]
+        添加/announce任务
+        格式：/announce 添加 时间 消息 [星期] [atall]
         时间格式：HH:MM (24小时制)
         星期格式：1-7 (1=周一，7=周日)，多个用逗号分隔，默认每天
         atall参数：可选，在消息后加上"atall"表示@全体成员
         """
         if len(parts) < 4:
-            await self.send_message("❌ 格式错误\n正确格式：定时喊话 添加 HH:MM 消息内容 [星期] [atall]\n例如：定时喊话 添加 08:30 早上好 1,2,3,4,5 atall")
+            await self.send_message("❌ 格式错误\n正确格式：/announce 添加 HH:MM 消息内容 [星期] [atall]\n例如：/announce 添加 08:30 早上好 1,2,3,4,5 atall")
             return
             
         # 解析时间
@@ -141,7 +141,7 @@ class TimedAnnouncement:
             days_str = self._format_days_of_week(days_of_week)
             at_all_str = "✅ @全体成员" if at_all else "❌ 不@全体成员"
             await self.send_message(
-                f"✅ 定时喊话任务添加成功！\n"
+                f"✅ /announce任务添加成功！\n"
                 f"📅 时间：{hour:02d}:{minute:02d}\n"
                 f"📝 内容：{message}\n"
                 f"📆 星期：{days_str}\n"
@@ -153,17 +153,17 @@ class TimedAnnouncement:
             
     async def delete_announcement(self, parts: list, user_id: str):
         """
-        删除定时喊话任务
-        格式：定时喊话 删除 任务ID
+        删除/announce任务
+        格式：/announce 删除 任务ID
         """
         if len(parts) < 3:
-            await self.send_message("❌ 格式错误\n正确格式：定时喊话 删除 任务ID\n使用'定时喊话 列表'查看任务ID")
+            await self.send_message("❌ 格式错误\n正确格式：/announce 删除 任务ID\n使用'/announce 列表'查看任务ID")
             return
             
         try:
             task_id = int(parts[2])
         except ValueError:
-            await self.send_message("❌ 任务ID必须是数字\n使用'定时喊话 列表'查看任务ID")
+            await self.send_message("❌ 任务ID必须是数字\n使用'/announce 列表'查看任务ID")
             return
             
         # 先检查任务是否存在且属于当前群组
@@ -184,16 +184,16 @@ class TimedAnnouncement:
             
     async def list_announcements(self, user_id: str, group_id: str):
         """
-        列出定时喊话任务
-        格式：定时喊话 列表
+        列出/announce任务
+        格式：/announce 列表
         """
         tasks, result_msg = self.db.list_announcements(group_id=group_id, user_id=user_id)
         
         if not tasks:
-            await self.send_message("📭 当前没有定时喊话任务")
+            await self.send_message("📭 当前没有/announce任务")
             return
             
-        response = "📋 定时喊话任务列表：\n\n"
+        response = "📋 /announce任务列表：\n\n"
         
         for task in tasks:
             status = "✅ 启用" if task['enabled'] else "❌ 禁用"
@@ -221,33 +221,33 @@ class TimedAnnouncement:
         
     async def clear_all_announcements(self, user_id: str, group_id: str):
         """
-        清除当前群组的所有定时喊话任务
-        格式：定时喊话 清除
+        清除当前群组的所有/announce任务
+        格式：/announce 清除
         """
         # 获取当前群组的所有任务
         tasks, _ = self.db.list_announcements(group_id=group_id, user_id=user_id)
         
         if not tasks:
-            await self.send_message("📭 当前群组没有定时喊话任务")
+            await self.send_message("📭 当前群组没有/announce任务")
             return
         
         # 确认清除
         await self.send_message(
-            f"⚠️ 确认清除当前群组的所有定时喊话任务吗？\n"
+            f"⚠️ 确认清除当前群组的所有/announce任务吗？\n"
             f"📊 将删除 {len(tasks)} 个任务\n"
-            f"📝 请输入：定时喊话 确认清除"
+            f"📝 请输入：/announce 确认清除"
         )
         
     async def confirm_clear_all(self, user_id: str, group_id: str):
         """
-        确认清除当前群组的所有定时喊话任务
-        格式：定时喊话 确认清除
+        确认清除当前群组的所有/announce任务
+        格式：/announce 确认清除
         """
         # 获取当前群组的所有任务
         tasks, _ = self.db.list_announcements(group_id=group_id, user_id=user_id)
         
         if not tasks:
-            await self.send_message("📭 当前群组没有定时喊话任务")
+            await self.send_message("📭 当前群组没有/announce任务")
             return
         
         # 删除所有任务
@@ -258,24 +258,24 @@ class TimedAnnouncement:
                 deleted_count += 1
         
         if deleted_count > 0:
-            await self.send_message(f"✅ 已清除当前群组的所有定时喊话任务\n📊 共删除 {deleted_count} 个任务")
+            await self.send_message(f"✅ 已清除当前群组的所有/announce任务\n📊 共删除 {deleted_count} 个任务")
         else:
             await self.send_message("❌ 清除任务失败，请稍后重试")
         
     async def toggle_announcement(self, parts: list, user_id: str, enable: bool):
         """
-        启用/禁用定时喊话任务
-        格式：定时喊话 启用/禁用 任务ID
+        启用/禁用/announce任务
+        格式：/announce 启用/禁用 任务ID
         """
         if len(parts) < 3:
             action = "启用" if enable else "禁用"
-            await self.send_message(f"❌ 格式错误\n正确格式：定时喊话 {action} 任务ID\n使用'定时喊话 列表'查看任务ID")
+            await self.send_message(f"❌ 格式错误\n正确格式：/announce {action} 任务ID\n使用'/announce 列表'查看任务ID")
             return
             
         try:
             task_id = int(parts[2])
         except ValueError:
-            await self.send_message("❌ 任务ID必须是数字\n使用'定时喊话 列表'查看任务ID")
+            await self.send_message("❌ 任务ID必须是数字\n使用'/announce 列表'查看任务ID")
             return
             
         # 先检查任务是否存在且属于当前群组
@@ -298,35 +298,35 @@ class TimedAnnouncement:
         """
         显示帮助信息
         """
-        help_text = """📋 定时喊话功能使用说明：
+        help_text = """📋 /announce功能使用说明：
 
 🔧 基本命令格式：
-定时喊话 [命令] [参数]
+/announce [命令] [参数]
 
 📝 可用命令：
 
 1. 添加任务：
-   定时喊话 添加 HH:MM 消息内容 [星期] [atall]
-   例：定时喊话 添加 08:30 早上好
-   例：定时喊话 添加 12:00 午饭时间 1,2,3,4,5 atall
+   /announce 添加 HH:MM 消息内容 [星期] [atall]
+   例：/announce 添加 08:30 早上好
+   例：/announce 添加 12:00 午饭时间 1,2,3,4,5 atall
 
 2. 删除任务：
-   定时喊话 删除 任务ID
-   例：定时喊话 删除 1
+   /announce 删除 任务ID
+   例：/announce 删除 1
 
 3. 清除任务：
-   定时喊话 清除
-   例：定时喊话 清除（需要确认：定时喊话 确认清除）
+   /announce 清除
+   例：/announce 清除（需要确认：/announce 确认清除）
 
 4. 查看任务：
-   定时喊话 列表
+   /announce 列表
 
 5. 启用/禁用任务：
-   定时喊话 启用 任务ID
-   定时喊话 禁用 任务ID
+   /announce 启用 任务ID
+   /announce 禁用 任务ID
 
 6. 显示帮助：
-   喊话帮助 或 喊话菜单
+   /help 或 /help
 
 📌 参数说明：
 - HH:MM：24小时制时间，如08:30、14:00
@@ -378,7 +378,7 @@ class TimedAnnouncement:
 
 class AnnouncementChecker:
     """
-    定时喊话检查器，用于定时检查并执行喊话任务
+    /announce检查器，用于定时检查并执行喊话任务
     """
     def __init__(self, websocket):
         self.logger = Logger("AnnouncementChecker")
@@ -419,14 +419,14 @@ class AnnouncementChecker:
                         await self.api.send_at_group_message(
                             group_id,
                             "all",  # @全体成员
-                            f"⏰ 定时喊话提醒：\n{actual_message}"
+                            f"⏰ /announce提醒：\n{actual_message}"
                         )
                         self.logger.info(f"已执行喊话任务 {task['id']}，群组：{group_id}，@全体成员")
                     else:
                         # 发送普通消息
                         await self.api.send_group_message(
                             group_id,
-                            f"⏰ 定时喊话提醒：\n{message}"
+                            f"⏰ /announce提醒：\n{message}"
                         )
                         self.logger.info(f"已执行喊话任务 {task['id']}，群组：{group_id}")
                     

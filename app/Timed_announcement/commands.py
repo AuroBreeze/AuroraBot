@@ -13,15 +13,15 @@ def _register():
         return True, None
 
     registry.register(Command(
-        name="/定时喊话",
-        aliases=["定时喊话"],
+        name="/announce",
+        aliases=["announce", "timed_announcement"],
         handler=_ta_handler,
         description="设置与管理定时喊话任务（需群管理员权限）",
-        usage="添加 <HH:MM> <内容> [星期1-7]\n列表\n删除 <任务ID>\n启用 <任务ID>\n禁用 <任务ID>",
+        usage="添加 <HH:MM> <内容> [星期1-7] [atall]\n列表\n删除 <任务ID>\n启用 <任务ID>\n禁用 <任务ID>",
         required_level=LEVEL_ADMIN,
         app_name="定时喊话",
         sub_commands={
-            "添加": "添加定时喊话任务（星期用逗号分隔，如 1,2,3）",
+            "添加": "添加定时喊话任务（星期用逗号分隔；末尾 atall 表示@全体）",
             "列表": "查看自己的喊话任务列表",
             "删除": "删除自己的喊话任务",
             "启用": "启用任务",

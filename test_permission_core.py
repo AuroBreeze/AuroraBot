@@ -153,7 +153,7 @@ def test_admin_raise_cross_group():
 
 
 def test_simple_subscribe_command():
-    print("\n[7] 简单版群授权命令 /订阅群")
+    print("\n[7] 简单版群授权命令 /sub_group")
     from app.Lssuing.services.admin.group_service import GroupService
     import app.Lssuing.services.admin.group_service as group_svc_mod
 
@@ -169,14 +169,14 @@ def test_simple_subscribe_command():
         async def run(raw, uid=ADMIN):
             return await g.authorize_group_simple({"raw_message": raw, "user_id": uid})
 
-        # 基本：/订阅群 <群号> <天数>，获权用户默认执行者
-        judge, msg = asyncio.run(run("/订阅群 7770001 30"))
+        # 基本：/sub_group <群号> <天数>，获权用户默认执行者
+        judge, msg = asyncio.run(run("/sub_group 7770001 30"))
         check("简单版订阅成功", judge, msg)
         check("群在授权期内", svc.check_group_authorized("7770001"))
         check("获权用户默认为执行者(2级)", svc.check_user_permission("7770001", ADMIN, LEVEL_OWNER))
 
         # 显式获权用户
-        judge, msg = asyncio.run(run("/订阅群 7770002 30 20001"))
+        judge, msg = asyncio.run(run("/sub_group 7770002 30 20001"))
         check("显式获权用户生效", judge and svc.check_user_permission("7770002", "20001", LEVEL_OWNER), msg)
 
         # 别名 sub_group
@@ -184,15 +184,15 @@ def test_simple_subscribe_command():
         check("别名 sub_group 可用", judge, msg)
 
         # 参数错误
-        judge, msg = asyncio.run(run("/订阅群 7770004 abc"))
+        judge, msg = asyncio.run(run("/sub_group 7770004 abc"))
         check("天数非整数被拒", not judge and "整数" in msg, msg)
-        judge, msg = asyncio.run(run("/订阅群 7770005"))
+        judge, msg = asyncio.run(run("/sub_group 7770005"))
         check("缺少参数被拒", not judge and "格式" in msg, msg)
-        judge, msg = asyncio.run(run("/订阅群 7770006 -1"))
+        judge, msg = asyncio.run(run("/sub_group 7770006 -1"))
         check("负数天数被拒", not judge and "负数" in msg, msg)
 
         # 非管理员被拒
-        judge, msg = asyncio.run(run("/订阅群 7770007 30", uid=OWNER))
+        judge, msg = asyncio.run(run("/sub_group 7770007 30", uid=OWNER))
         check("非管理员订阅被拒", not judge, msg)
     finally:
         group_svc_mod.permission_service = old_perm
