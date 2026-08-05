@@ -23,8 +23,9 @@ class GroupManagerService:
     def __init__(self):
         self.logger = Logger("group_manager")
         self.store = member_store.member_store
-        # 最近一次 /inactive 列表缓存（group_id -> 完整降序 user_id 列表），供 /kick 数字序号
         self._last_inactive: dict[str, list] = {}
+        # /at_all 冷却记录（group, user）-> 上次调用时间戳
+        self._at_all_cooldown: dict = {}
 
     def _now_str(self) -> str:
         return timeutil.now_str()

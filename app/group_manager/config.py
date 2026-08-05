@@ -19,6 +19,7 @@ CONFIG_KEYS = {
     "observe_owner_timeout":  {"type": int,  "desc": "群主未回复升级群管的等待（分钟）"},
     "observe_online_minutes": {"type": int,  "desc": "升级时“在线”判定窗口（分钟内发言的管理员/被授权用户）"},
     "observe_escalate_at":    {"type": int,  "desc": "升级时最多 @ 的群管数量"},
+    "at_all_cooldown":        {"type": int,  "desc": "/at_all 冷却（秒/人/群，防刷屏）"},
     "auto_approve":           {"type": bool, "desc": "自动同意入群申请"},
     "auto_approve_scope":     {"type": str,  "desc": "自动同意范围：authorized=仅授权群 / all=全部群"},
     "auto_backfill":          {"type": bool, "desc": "自动补记录：未处理过的群自动补一次成员记录"},
@@ -48,6 +49,7 @@ DEFAULTS = {
     "observe_owner_timeout": 30,    # 群主未回复升级群管的等待（分钟）
     "observe_online_minutes": 10,   # 升级时“在线”判定窗口（分钟内发言的群管）
     "observe_escalate_at": 2,       # 升级时最多 @ 的群管数量
+    "at_all_cooldown": 60,          # /at_all 冷却（秒/人/群，防刷屏）
     "auto_approve": True,           # 自动同意入群
     "auto_approve_scope": "authorized",  # authorized=仅已授权群; all=全部
     "auto_backfill": True,          # 自动补记录：未处理过的群自动补一次

@@ -872,6 +872,46 @@ def test_observe_ask_owner_and_nickname():
     check("消息事件更新已变昵称", store.get_member("g1", "u1")["nickname"] == "小红改名")
 
 
+def test_at_all_command():
+    print("\n[18] /at_all：普通成员 @全体 转发 + 冷却防刷")
+    from app.core.runtime import set_api, set_self_id
+    from app.group_manager.commands import _at_all_handler
+
+    svc, store = make_svc()
+    api = FakeAPI()
+    set_api(api)
+    set_self_id("BOTX")
+
+    async def run(raw, uid="u1", gid="g1"):
+        return await _at_all_handler(None, {"raw_message": raw, "group_id": gid, "user_id": uid})
+
+    # 正常：提取命令后文字 + at all 段
+    judge, text = asyncio.run(run("/at_all 今晚八点开黑"))
+    check("提取文字并发送", judge and text == "", text)
+    sent = [m for m in api.messages if m[0] == "array"]
+    check("消息已发送", len(sent) == 1, len(sent))
+    segs = sent[0][2]
+    check("含 @全体 段", segs[0] == {"type": "at", "data": {"qq": "all"}}, str(segs))
+    check("正文在后", segs[2]["data"]["text"] == "今晚八点开黑", str(segs))
+
+    # 空内容提示用法
+    judge, text = asyncio.run(run("/at_all"))
+    check("空内容提示用法", "用法" in text, text)
+
+    # 冷却：连续第二次被拒
+    judge, text = asyncio.run(run("/at_all 又来"))
+    check("冷却期内拒绝", "频繁" in text, text)
+
+    # 冷却期外：他人可发（按人/群隔离）
+    judge, text = asyncio.run(run("/at_all 其他人发", uid="u2"))
+    check("其他人不受冷却影响", judge and text == "", text)
+
+    # 普通成员可用：LEVEL_NONE 注册（无权限要求）
+    from app.core.commands import registry
+    cmd = registry._commands.get("/at_all")
+    check("已注册且无权限要求", cmd is not None and cmd.required_level >= 4, str(cmd))
+
+
 def test_gm_config_command():
     print("\n[14] 群管配置命令（/gm_config：查看/修改/持久化）")
     from app.group_manager.commands import _gm_config_handler
@@ -931,6 +971,7 @@ if __name__ == "__main__":
     test_inactive_list_and_kick()
     test_api_active_sync()
     test_observe_ask_owner_and_nickname()
+    test_at_all_command()
     test_gm_config_command()
     print(f"\n===== {len(PASS)} passed, {len(FAIL)} failed =====")
     sys.exit(1 if FAIL else 0)

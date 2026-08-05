@@ -2,7 +2,7 @@
 
 from app.core.commands import registry, Command
 from app.core.hot_reload import hot_reloader
-from app.core.permission.constants import LEVEL_SYSTEM, LEVEL_ADMIN
+from app.core.permission.constants import LEVEL_SYSTEM, LEVEL_ADMIN, LEVEL_NONE
 from . import events  # noqa: F401  （确保事件订阅注册；events 为接线层，不纳入热更新）
 from .service import group_manager_service
 from . import config as gm_config
@@ -100,6 +100,34 @@ async def _sync_active_handler(websocket, message) -> tuple[bool, str]:
     return True, await group_manager_service.sync_all_groups_active(force=True)
 
 
+async def _at_all_handler(websocket, message) -> tuple[bool, str]:
+    """/at_all 内容：普通成员可用，bot 提取命令后文字并 @ 全体转发（带冷却防刷）"""
+    import time
+    from app.core.runtime import get_api
+    group_id = str(message.get("group_id", ""))
+    user_id = str(message.get("user_id", ""))
+    parts = str(message.get("raw_message", "")).split(maxsplit=1)
+    text = parts[1].strip() if len(parts) > 1 else ""
+    if not text:
+        return True, "用法：/at_all 内容（将自动 at 全体转发）"
+    now = time.time()
+    key = (group_id, user_id)
+    last = group_manager_service._at_all_cooldown.get(key, 0)
+    cd = gm_config.get_int("at_all_cooldown", 60)
+    if now - last < cd:
+        return True, f"操作太频繁，请 {int(cd - (now - last))} 秒后再试"
+    group_manager_service._at_all_cooldown[key] = now
+    api = get_api()
+    if api is None:
+        return True, "连接不可用，请稍后重试"
+    await api.send_group_message_array(group_id, [
+        {"type": "at", "data": {"qq": "all"}},
+        {"type": "text", "data": {"text": " "}},
+        {"type": "text", "data": {"text": text}},
+    ])
+    return True, ""
+
+
 def _register():
     registry.register(Command(
         name="/members",
@@ -193,6 +221,17 @@ def _register():
                "指定群号只刷新该群；无参数刷新全部授权群。",
         example="/sync_active\n/sync_active 736038975",
         required_level=LEVEL_ADMIN, app_name=APP,
+    ))
+    registry.register(Command(
+        name="/at_all",
+        aliases=["atall", "全体"],
+        handler=_at_all_handler,
+        description="@ 全体转发文字（所有群成员可用）",
+        usage="内容",
+        detail="普通成员也可使用：输入 /at_all 内容，bot 将命令后的文字\n"
+               "以 @全体 的形式转发到群。带冷却防刷（at_all_cooldown 秒/人/群）。",
+        example="/at_all 今晚八点开黑，@全员集合",
+        required_level=LEVEL_NONE, app_name=APP,
     ))
 
     # 热更新清单：config（依赖最前）→ service → commands（events 为接线层不重载）
