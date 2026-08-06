@@ -129,6 +129,7 @@ def test_observation_kick():
     store.record_join("g1", "u1")
     asyncio.run(svc._check_observation("g1", "u1"))
     check("未发言被踢", ("g1", "u1") in api.kicked, str(api.kicked))
+    check("踢出提示已发送", any("已移出本群" in str(m) for m in api.messages), str(api.messages[-1] if api.messages else ""))
 
     # 已发言成员 → 跳过
     store.record_join("g1", "u2")

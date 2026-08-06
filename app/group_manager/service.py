@@ -105,6 +105,22 @@ class GroupManagerService:
             return
         ok = await api.set_group_kick_member(group_id, user_id)
         self.logger.info(f"观察期未发言踢出 群:{group_id} 用户:{user_id} 结果:{ok}")
+        if ok:
+            await self._send_kick_notice(group_id, user_id, "入群观察期未发言")
+
+    async def _send_kick_notice(self, group_id: str, user_id: str, reason: str) -> None:
+        """踢人成功后向群发送移出提示（at + 原因）"""
+        try:
+            api = get_api()
+            if api is None:
+                return
+            await api.send_group_message_array(group_id, [
+                {"type": "at", "data": {"qq": user_id}},
+                {"type": "text", "data": {"text": " "}},
+                {"type": "text", "data": {"text": f"已移出本群（原因：{reason}）"}},
+            ])
+        except Exception:
+            self.logger.warning(f"踢出提示发送失败 群:{group_id} 用户:{user_id}")
 
     async def _ask_owner_before_kick(self, group_id: str, user_id: str) -> None:
         """观察期到期未发言：默认先只问群主；超时未回复再 @管理员/被授权用户；处理完毕即结束。"""
@@ -251,6 +267,8 @@ class GroupManagerService:
                     ok = await api.set_group_kick_member(group_id, member["user_id"])
                     extras["observe_pending"] = "resolved"
                     self.logger.info(f"群管回复 1 同意移出 群:{group_id} 成员:{member['user_id']} 结果:{ok}")
+                    if ok:
+                        await self._send_kick_notice(group_id, member["user_id"], "入群观察期未发言（群管确认）")
                 else:
                     extras["observe_pending"] = "rejected"
                     self.logger.info(f"群管回复 0 拒绝移出 群:{group_id} 成员:{member['user_id']}（保留）")
@@ -566,6 +584,8 @@ class GroupManagerService:
                 if inactive >= days:
                     ok = await api.set_group_kick_member(group_id, uid)
                     self.logger.info(f"不活跃踢出 群:{group_id} 用户:{uid} 不活跃:{inactive}天 结果:{ok}")
+                    if ok:
+                        await self._send_kick_notice(group_id, uid, f"不活跃 {inactive} 天")
                 elif inactive >= days - remind_days:
                     await self._remind_inactive(group_id, uid, days, inactive)
 
