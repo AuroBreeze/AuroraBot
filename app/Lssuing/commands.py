@@ -25,6 +25,23 @@ def _register():
     APP = "权限系统"
 
     # ---- 系统管理员（1 级）：群组与用户授权管理 ----
+    from .services.admin.admin_service import AdminService
+    admin_svc = AdminService()
+    registry.register(Command(
+        name="/admin",
+        cn_name="管理员",
+        aliases=["admin", "set_admin"],
+        handler=admin_svc.admin_handler,
+        description="管理系统管理员（设置/添加/移除/列出）",
+        usage="set <qq> | add <qq> | del <qq> | list",
+        detail="系统管理员管理（换人/多人）：\n"
+               "- set <qq>：设置主管理员，写入 config/_config.yml（Docker 挂载卷持久化）并立即生效\n"
+               "- add <qq>：添加系统管理员（立即生效）\n"
+               "- del <qq>：移除系统管理员（至少保留 1 名）\n"
+               "- list：列出全部系统管理员",
+        example="/admin set 1732373074\n/admin add 123456\n/admin del 123456\n/admin list",
+        required_level=LEVEL_SYSTEM, app_name=APP,
+    ))
     registry.register(Command(
         name="/check_groups",
         cn_name="检查群组",
