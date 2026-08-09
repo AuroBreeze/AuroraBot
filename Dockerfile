@@ -1,5 +1,9 @@
 # 阿里云镜像示例
-FROM python:3.10.12-slim
+FROM python:3.12-slim
+
+# 时区：容器内统一北京时间（与代码 TIMEZONE 一致）
+ENV TZ=Asia/Shanghai \
+    AURORA_ENV=prod
 
 WORKDIR /app
 
@@ -21,7 +25,8 @@ RUN mkdir -p /app/store/db
 # 可编辑安装项目本体
 RUN uv sync --frozen
 
-EXPOSE 3001
-
+# bot 是 WebSocket 客户端（连接 NapCat），无需对外暴露端口；
+# 如 NapCat 在同一 compose 网络内，通过服务名访问（见 docker-compose.yml WS_URL）
+# EXPOSE 3001
 
 CMD ["uv", "run", "python", "main.py"]

@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.pyc
+.reasonix
+AuroCC.egg-info
+store
+json
+legacy
+test
+.mcp.json
+reasonix.toml
+*.bat
+config/nt_config

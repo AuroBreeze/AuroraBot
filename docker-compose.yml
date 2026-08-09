@@ -9,6 +9,9 @@ services:
       - "3001:3001"
       - "6099:6099"
     restart: unless-stopped
+    # NapCat 数据持久化：QQ 登录态/配置，避免容器重建后重新扫码登录
+    volumes:
+      - napcat-data:/app/.config/QQ
 
   app:
     build: .
@@ -17,3 +20,15 @@ services:
     restart: always
     depends_on:
       - aurorabot
+    environment:
+      # 通过 compose 服务名访问 NapCat 的 WebSocket（容器内 127.0.0.1 指向自身，不可用）
+      - WS_URL=ws://aurorabot:3001
+      - AURORA_ENV=prod
+    volumes:
+      # 数据持久化：sqlite 数据库（member_store.db / store_db.db）
+      - ./store:/app/store
+      # 配置持久化：group_manager.yml（/gm_config 写回）、_config.yml（QQ 管理员）
+      - ./config:/app/config
+
+volumes:
+  napcat-data:
