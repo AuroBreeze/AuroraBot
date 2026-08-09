@@ -42,7 +42,7 @@ NapCat + AuroraBot 打包进同一个镜像，任何 Docker 环境直接挂载�
 # 构建
 docker build -f Dockerfile.allinone -t aurora-bot:allinone .
 
-# 运行（挂载数据卷持久化）
+# 运行（挂载数据卷持久化；Windows PowerShell 请用反引号续行或直接复制单行）
 docker run -d --name aurora-allinone \
   --restart unless-stopped \
   -p 6099:6099 -p 6081:6081 -p 3001:3001 \
@@ -50,6 +50,9 @@ docker run -d --name aurora-allinone \
   -v aurora-store:/app/bot/store \
   -v aurora-config:/app/bot/config \
   aurora-bot:allinone
+
+# Windows PowerShell 单行等价：
+# docker run -d --name aurora-allinone --restart unless-stopped -p 6099:6099 -p 6081:6081 -p 3001:3001 -v aurora-napcat:/app/.config/QQ -v aurora-store:/app/bot/store -v aurora-config:/app/bot/config aurora-bot:allinone
 ```
 
 - 容器内 supervisord 同时管理 `qq`（NapCat）与 `bot` 两个进程
