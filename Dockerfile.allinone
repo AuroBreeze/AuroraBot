@@ -1,0 +1,34 @@
+# ============================================================
+# 一体化镜像：NapCat（QQ 客户端 + OneBot WS 服务）+ AuroraBot
+# 单容器同时运行 NapCat 与 bot，bot 经 ws://127.0.0.1:3001 连接本容器 NapCat
+#
+# 构建:   docker build -f Dockerfile.allinone -t aurora-bot:allinone .
+# 运行:   见 README「一体化镜像」或 docker run 示例
+# ============================================================
+FROM mlikiowa/napcat-framework-docker:latest
+
+# 安装 pip（Debian slim 无 pip/ensurepip，走阿里云 apt 源）→ 安装 uv
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends python3-pip \
+ && rm -rf /var/lib/apt/lists/* \
+ && pip install --no-cache-dir --break-system-packages uv -i https://mirrors.aliyun.com/pypi/simple/
+
+WORKDIR /app/bot
+
+# 先复制依赖清单，利用构建缓存
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project
+
+COPY . .
+RUN mkdir -p /app/bot/store/db && uv sync --frozen
+
+# 追加 bot 进程到 supervisord（NapCat 的 qq 进程由镜像默认配置管理）
+# - --no-sync: 启动时不做依赖同步（镜像内已装好），更快更稳
+# - user=napcat: /app 已由镜像 start.sh chown 给 napcat 用户
+# - environment HOME: uv 默认写 /root/.cache 会权限拒绝，改到 napcat 可写目录
+# - autorestart: bot 崩溃自动拉起
+RUN printf '\n[program:bot]\ncommand=/bin/bash -c "cd /app/bot && uv run --no-sync python main.py"\nuser=napcat\nenvironment=HOME="/app/bot"\nstdout_logfile=/dev/stdout\nstdout_logfile_maxbytes=0\nstderr_logfile=/dev/stderr\nstderr_logfile_maxbytes=0\nautorestart=true\n' >> /etc/supervisord.conf
+
+# 可选暴露：6099 NapCat WebUI / 6081 noVNC / 3001 WS（供外部工具连）
+EXPOSE 6099 6081 3001
