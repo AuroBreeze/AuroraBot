@@ -52,8 +52,15 @@ async def main():
 
 
 if __name__ == '__main__':
+    import signal
+
+    def _sigterm(_signum, _frame):
+        # Docker stop 发送 SIGTERM → 转成 KeyboardInterrupt 触发 asyncio.run 的优雅取消清理
+        raise KeyboardInterrupt()
+
+    signal.signal(signal.SIGTERM, _sigterm)
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        # Ctrl+C：asyncio.run 已取消全部任务并清理，这里仅提示
+        # Ctrl+C / SIGTERM：asyncio.run 已取消全部任务并清理，这里仅提示
         print("\n已退出")
