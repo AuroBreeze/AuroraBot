@@ -175,3 +175,5 @@ study/
 *.tar
 napcat.json
 webui.json
+# Docker 导出镜像（大文件不入库）
+*.tar.gz
