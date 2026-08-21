@@ -692,6 +692,18 @@ def test_api_active_sync():
     m2 = store.get_member("g1", "1002")
     check("last_sent_time=0 不写入活跃", m2["last_active"] is None, m2["last_active"])
 
+    # API 成员快照中已不存在的记录应在活跃同步时清理，避免出现在不活跃列表。
+    store.record_join("g1", "left-member")
+    check("离群残留记录前置存在", store.get_member("g1", "left-member") is not None)
+    api.member_roles.pop("1002")
+    api.member_infos.pop("1002")
+    updated, total = asyncio.run(run())
+    check("同步清理已离群成员", store.get_member("g1", "left-member") is None,
+          store.get_member("g1", "left-member"))
+    check("离群成员记录已删除", store.get_member("g1", "1002") is None,
+          store.get_member("g1", "1002"))
+    check("同步仍按当前成员计数", total == 1, total)
+
     # 已有成员：upsert 不覆盖旧 last_active（传 None 时保留）
     store.record_join("g1", "1003")
     store.record_message("g1", "1003")
@@ -704,7 +716,7 @@ def test_api_active_sync():
     # 无效时间戳容错：不会崩
     api.member_infos["1001"]["last_sent_time"] = "99999999999999999999"
     updated, total = asyncio.run(run())
-    check("无效时间戳容错", total == 3, (updated, total))
+    check("无效时间戳容错", total == 2, (updated, total))
 
     # 同步全部授权群
     gm_config._config["active_sync_enabled"] = True

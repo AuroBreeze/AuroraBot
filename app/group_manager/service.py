@@ -454,6 +454,13 @@ class GroupManagerService:
             members = await api.get_group_member_list(group_id)
         except Exception:
             return 0, 0
+        # 成员列表是本群当前成员的权威快照，清理已退群或被踢的历史记录。
+        removed = self.store.remove_members_not_in(
+            group_id,
+            (m.get("user_id") for m in members if isinstance(m, dict)),
+        )
+        if removed:
+            self.logger.info(f"活跃同步清理离群成员 群:{group_id} 删除:{removed}")
         updated, total = 0, 0
         for m in members:
             uid = str(m.get("user_id") or "")

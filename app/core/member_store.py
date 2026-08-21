@@ -162,6 +162,26 @@ class MemberStore:
         )
         conn.commit()
 
+    def remove_members_not_in(self, group_id, user_ids) -> int:
+        """按当前群成员列表清理已退群或被踢的成员记录。"""
+        conn = self._get_connection()
+        group_id = str(group_id)
+        user_ids = {str(user_id) for user_id in user_ids if user_id}
+        stored_ids = {
+            row[0] for row in conn.execute(
+                "SELECT user_id FROM group_members WHERE group_id = ?", (group_id,)
+            ).fetchall()
+        }
+        removed_ids = stored_ids - user_ids
+        if not removed_ids:
+            return 0
+        conn.executemany(
+            "DELETE FROM group_members WHERE group_id = ? AND user_id = ?",
+            ((group_id, user_id) for user_id in removed_ids),
+        )
+        conn.commit()
+        return len(removed_ids)
+
     # ---------- 查询 ----------
 
     def get_member(self, group_id, user_id) -> Optional[dict]:
